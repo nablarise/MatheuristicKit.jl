@@ -58,7 +58,7 @@ const MOI = MathOptInterface
 const NMK = NablaMatheuristicKit
 
 # Create a model
-model = Model(GLPK.Optimizer)
+model = JuMP.direct_model(GLPK.Optimizer())
 @variable(model, 0 <= x <= 3)
 @objective(model, Min, x)
 
