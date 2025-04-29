@@ -18,13 +18,20 @@ struct DomainChangeTrackerHelper
     map_eq::Dict{MOI.VariableIndex, MOI.ConstraintIndex{MOI.VariableIndex, MOI.EqualTo{Float64}}}
     map_integer::Dict{MOI.VariableIndex, MOI.ConstraintIndex{MOI.VariableIndex, MOI.Integer}}
     map_binary::Dict{MOI.VariableIndex, MOI.ConstraintIndex{MOI.VariableIndex, MOI.ZeroOne}}
+
+    # Store variable index of original integer and binary variables.
+    # Required to branch on a relaxed model.
+    original_integer_vars::Set{MOI.VariableIndex}
+    original_binary_vars::Set{MOI.VariableIndex}
     function DomainChangeTrackerHelper()
         return new(
             Dict{MOI.VariableIndex,MOI.ConstraintIndex{MOI.VariableIndex,MOI.GreaterThan{Float64}}}(),
             Dict{MOI.VariableIndex,MOI.ConstraintIndex{MOI.VariableIndex,MOI.LessThan{Float64}}}(),
             Dict{MOI.VariableIndex,MOI.ConstraintIndex{MOI.VariableIndex,MOI.EqualTo{Float64}}}(),
             Dict{MOI.VariableIndex,MOI.ConstraintIndex{MOI.VariableIndex,MOI.Integer}}(),
-            Dict{MOI.VariableIndex,MOI.ConstraintIndex{MOI.VariableIndex,MOI.ZeroOne}}()
+            Dict{MOI.VariableIndex,MOI.ConstraintIndex{MOI.VariableIndex,MOI.ZeroOne}}(),
+            Set{MOI.VariableIndex}(),
+            Set{MOI.VariableIndex}()
         )
     end
 end
@@ -41,7 +48,6 @@ Register a constraint on a single variable in the appropriate mapping in the hel
 """
 _register_constraints!(helper, vi, ci) = nothing
 
-
 function _register_constraints!(helper, vi::F, ci::MOI.ConstraintIndex{F,S}) where {F<:MOI.VariableIndex,S<:MOI.GreaterThan}
     helper.map_lb[vi] = ci
 end
@@ -56,10 +62,12 @@ end
 
 function _register_constraints!(helper, vi::F, ci::MOI.ConstraintIndex{F,S}) where {F<:MOI.VariableIndex,S<:MOI.Integer}
     helper.map_integer[vi] = ci
+    push!(helper.original_integer_vars, vi)
 end
 
 function _register_constraints!(helper, vi::F, ci::MOI.ConstraintIndex{F,S}) where {F<:MOI.VariableIndex,S<:MOI.ZeroOne}
     helper.map_binary[vi] = ci
+    push!(helper.original_binary_vars, vi)
 end
 
 """
@@ -166,7 +174,7 @@ A new empty `DomainChangeDiff`.
 """
 DomainChangeDiff() = DomainChangeDiff(
     Dict{ColId,LowerBoundVarChange}(),
-    Dict{ColId,UpperBoundVarChange}()
+    Dict{ColId,UpperBoundVarChange}(),
 )
 
 """
@@ -244,7 +252,6 @@ function apply_change!(backend, diff::DomainChangeDiff, helper)
     end
     return
 end
-
 
 """
     DomainChangeTracker <: AbstractMathOptStateTracker
