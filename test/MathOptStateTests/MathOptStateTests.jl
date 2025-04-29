@@ -527,11 +527,99 @@ function test_math_opt_state3()
     end
 end
 
+function test_domain_change_tracker_continuous()
+    model = Model(GLPK.Optimizer)
+    @variable(model, x >= 0)
+    @variable(model, 0 <= y <= 3)
+
+    @objective(model, Min, x + y)
+
+    tracker = NMK.MathOptState.DomainChangeTracker()
+    helper = NMK.MathOptState.transform_model!(tracker, JuMP.backend(model))
+
+    @test JuMP.index(x) in keys(helper.map_lb)
+    @test JuMP.index(y) in keys(helper.map_lb)
+    @test length(helper.map_lb) == 2
+
+    @test JuMP.index(y) in keys(helper.map_ub)
+    @test length(helper.map_ub) == 1
+
+    @test isempty(helper.map_eq)
+    @test isempty(helper.map_binary)
+    @test isempty(helper.map_integer)
+    return
+end
+
+function test_domain_change_tracker_binary()
+    model = Model(GLPK.Optimizer)
+    @variable(model, x, Bin)
+    @variable(model, 0 <= y <= 1, Bin)
+
+    @objective(model, Min, x + y)
+
+    tracker = NMK.MathOptState.DomainChangeTracker()
+    helper = NMK.MathOptState.transform_model!(tracker, JuMP.backend(model))
+
+    @test JuMP.index(y) in keys(helper.map_lb)
+    @test length(helper.map_lb) == 1
+
+    @test JuMP.index(y) in keys(helper.map_ub)
+    @test length(helper.map_ub) == 1
+
+    @test isempty(helper.map_eq)
+    @test JuMP.index(x) in keys(helper.map_binary)
+    @test JuMP.index(y) in keys(helper.map_binary)
+    @test isempty(helper.map_integer)
+
+    # What happens when we relax ?
+    undo_relax = JuMP.relax_integrality(model)
+
+    @test !MOI.is_valid(JuMP.backend(model), helper.map_binary[JuMP.index(x)])
+    @test !MOI.is_valid(JuMP.backend(model), helper.map_binary[JuMP.index(y)])
+
+    @test MOI.is_valid(JuMP.backend(model), helper.map_lb[JuMP.index(y)])
+    @test MOI.is_valid(JuMP.backend(model), helper.map_ub[JuMP.index(y)])
+    return
+end
+
+function test_domain_change_tracker_integer()
+    model = Model(GLPK.Optimizer)
+    @variable(model, x >= 0, Int)
+    @variable(model, 0 <= y <= 9, Int)
+
+    @objective(model, Min, x + y)
+
+    tracker = NMK.MathOptState.DomainChangeTracker()
+    helper = NMK.MathOptState.transform_model!(tracker, JuMP.backend(model))
+
+    @test JuMP.index(x) in keys(helper.map_lb)
+    @test JuMP.index(y) in keys(helper.map_lb)
+    @test length(helper.map_lb) == 2
+
+    @test JuMP.index(y) in keys(helper.map_ub)
+    @test length(helper.map_ub) == 1
+
+    @test isempty(helper.map_eq)
+    @test isempty(helper.map_binary)
+    @test JuMP.index(x) in keys(helper.map_integer)
+    @test JuMP.index(y) in keys(helper.map_integer)
+
+    # What happens when we relax ?
+    undo_relax = JuMP.relax_integrality(model)
+
+    @test !MOI.is_valid(JuMP.backend(model), helper.map_integer[JuMP.index(x)])
+    @test !MOI.is_valid(JuMP.backend(model), helper.map_integer[JuMP.index(y)])
+    return
+end
+
 function run()
     @testset "MathOptStateTests" begin
         test_math_opt_state1()
         test_math_opt_state2()
         test_math_opt_state3()
+        test_domain_change_tracker_continuous()
+        test_domain_change_tracker_binary()
+        test_domain_change_tracker_integer()
     end
 end
 end # end module

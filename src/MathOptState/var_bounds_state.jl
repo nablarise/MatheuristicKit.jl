@@ -9,16 +9,22 @@ This is used to efficiently apply and track changes to variable bounds in an opt
 - `map_lb`: Maps variable indices to their lower bound constraints
 - `map_ub`: Maps variable indices to their upper bound constraints
 - `map_eq`: Maps variable indices to their equality constraints
+- `is_integer`: Boolean indicating whether the variable is integer
+- `is_binary`: Boolean indicating whether the variable is binary
 """
 struct DomainChangeTrackerHelper
     map_lb::Dict{MOI.VariableIndex, MOI.ConstraintIndex{MOI.VariableIndex, MOI.GreaterThan{Float64}}}
     map_ub::Dict{MOI.VariableIndex, MOI.ConstraintIndex{MOI.VariableIndex, MOI.LessThan{Float64}}}
     map_eq::Dict{MOI.VariableIndex, MOI.ConstraintIndex{MOI.VariableIndex, MOI.EqualTo{Float64}}}
+    map_integer::Dict{MOI.VariableIndex, MOI.ConstraintIndex{MOI.VariableIndex, MOI.Integer}}
+    map_binary::Dict{MOI.VariableIndex, MOI.ConstraintIndex{MOI.VariableIndex, MOI.ZeroOne}}
     function DomainChangeTrackerHelper()
         return new(
             Dict{MOI.VariableIndex,MOI.ConstraintIndex{MOI.VariableIndex,MOI.GreaterThan{Float64}}}(),
             Dict{MOI.VariableIndex,MOI.ConstraintIndex{MOI.VariableIndex,MOI.LessThan{Float64}}}(),
-            Dict{MOI.VariableIndex,MOI.ConstraintIndex{MOI.VariableIndex,MOI.EqualTo{Float64}}}()
+            Dict{MOI.VariableIndex,MOI.ConstraintIndex{MOI.VariableIndex,MOI.EqualTo{Float64}}}(),
+            Dict{MOI.VariableIndex,MOI.ConstraintIndex{MOI.VariableIndex,MOI.Integer}}(),
+            Dict{MOI.VariableIndex,MOI.ConstraintIndex{MOI.VariableIndex,MOI.ZeroOne}}()
         )
     end
 end
@@ -26,60 +32,38 @@ end
 """
     _register_constraints!(helper, vi, ci)
 
-Register a constraint in the appropriate mapping in the helper.
-This is a fallback method that does nothing for constraint types not handled.
+Register a constraint on a single variable in the appropriate mapping in the helper.
 
 # Arguments
 - `helper`: The DomainChangeTrackerHelper to update
 - `vi`: Variable index
-- `ci`: Constraint index
+- `ci`: Constraint index involving only the variable `vi`.
 """
 _register_constraints!(helper, vi, ci) = nothing
 
-"""
-    _register_constraints!(helper, vi::F, ci::MOI.ConstraintIndex{F,S}) where {F<:MOI.VariableIndex,S<:MOI.GreaterThan}
 
-Register a lower bound constraint in the helper.
-
-# Arguments
-- `helper`: The DomainChangeTrackerHelper to update
-- `vi`: Variable index
-- `ci`: Lower bound constraint index
-"""
 function _register_constraints!(helper, vi::F, ci::MOI.ConstraintIndex{F,S}) where {F<:MOI.VariableIndex,S<:MOI.GreaterThan}
     helper.map_lb[vi] = ci
 end
 
-"""
-    _register_constraints!(helper, vi::F, ci::MOI.ConstraintIndex{F,S}) where {F<:MOI.VariableIndex,S<:MOI.LessThan}
-
-Register an upper bound constraint in the helper.
-
-# Arguments
-- `helper`: The DomainChangeTrackerHelper to update
-- `vi`: Variable index
-- `ci`: Upper bound constraint index
-"""
 function _register_constraints!(helper, vi::F, ci::MOI.ConstraintIndex{F,S}) where {F<:MOI.VariableIndex,S<:MOI.LessThan}
     helper.map_ub[vi] = ci
 end
 
-"""
-    _register_constraints!(helper, vi::F, ci::MOI.ConstraintIndex{F,S}) where {F<:MOI.VariableIndex,S<:MOI.EqualTo}
-
-Register an equality constraint in the helper.
-
-# Arguments
-- `helper`: The DomainChangeTrackerHelper to update
-- `vi`: Variable index
-- `ci`: Equality constraint index
-"""
 function _register_constraints!(helper, vi::F, ci::MOI.ConstraintIndex{F,S}) where {F<:MOI.VariableIndex,S<:MOI.EqualTo}
     helper.map_eq[vi] = ci
 end
 
+function _register_constraints!(helper, vi::F, ci::MOI.ConstraintIndex{F,S}) where {F<:MOI.VariableIndex,S<:MOI.Integer}
+    helper.map_integer[vi] = ci
+end
+
+function _register_constraints!(helper, vi::F, ci::MOI.ConstraintIndex{F,S}) where {F<:MOI.VariableIndex,S<:MOI.ZeroOne}
+    helper.map_binary[vi] = ci
+end
+
 """
-    LowerBoundVarChange <: AbstractAtomicChange
+    LowerBoundVarChange <: AbstractAtomicChange@
 
 Represents a change to the lower bound of a variable.
 
