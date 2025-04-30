@@ -116,7 +116,7 @@ function build_jump_model(problem::CirclePackingProblem)
     @variable(model, y[items, containers])
 
     # z[i,c]: 1 if item i is placed in container c, 0 otherwise
-    @variable(model, 0 <= α[items, containers] <= 1)
+    @variable(model, 0 <= α[items, containers] <= 1, Bin)
 
     # Objective: Maximize total reward of placed items
     @objective(model, Max, sum(item_rewards[i] * α[i, c] for i in items, c in containers))
@@ -161,16 +161,27 @@ mutable struct CirclePackingSearchSpace <: NMK.TreeSearch.AbstractSearchSpace
     nb_nodes_evaluated::Int
     problem::CirclePackingProblem
     model::JuMP.Model
+    helper::NMK.MathOptState.DomainChangeTrackerHelper
+    root_state
+    tracker
 end
 
-function CirclePackingSearchSpace(problem::CirclePackingProblem, model::JuMP.Model; node_limit=1000)
-    return CirclePackingSearchSpace(node_limit, 0, problem, model)
+function CirclePackingSearchSpace(
+    problem::CirclePackingProblem, 
+    model::JuMP.Model, 
+    helper::NMK.MathOptState.DomainChangeTrackerHelper,
+    root_state,
+    tracker; 
+    node_limit=1000
+)
+    return CirclePackingSearchSpace(node_limit, 0, problem, model, helper, root_state, tracker)
 end
 
 struct CirclePackingNode
     id::Int
     depth::Int
     value_guess::Float64
+    state
 end
 
 struct CirclePackingResult
@@ -179,7 +190,6 @@ struct CirclePackingResult
     obj_value::Float64
     integral::Bool
 end
-
 
 function CirclePackingResult(node_id::Int, model::JuMP.Model, problem::CirclePackingProblem)
     assignment = zeros(problem.num_items, problem.num_containers)
@@ -203,19 +213,68 @@ end
 ##########
 #########
 
-NMK.TreeSearch.new_root(space::CirclePackingSearchSpace) = CirclePackingNode(0, 0, 0.0)
+# 1 is the best value (meaning the value x = round(x) +/- 1/2)
+# 0 is the worst (meaning x = round(x))
+function most_fractional_value(space, var_id)
+    val = MOI.get(JuMP.backend(space.model), MOI.VariablePrimal(), var_id)
+    return 2 * abs(round(val) - val)
+end
+
+NMK.TreeSearch.new_root(space::CirclePackingSearchSpace) = CirclePackingNode(0, 0, 0.0, space.root_state)
 NMK.TreeSearch.stop(space::CirclePackingSearchSpace, untreated_nodes) = space.nb_nodes_evaluated >= space.node_limit || isempty(untreated_nodes)
 
 function NMK.TreeSearch.children(space::CirclePackingSearchSpace, current::CirclePackingNode)
+    println("--- node depth = $(current.depth)")
+    println("---- forward ----")
+    NMK.MathOptState.apply_change!(JuMP.backend(space.model), NMK.MathOptState.forward(current.state), space.helper)
     space.nb_nodes_evaluated += 1
     depth = current.depth + 1
 
+    MOI.set(space.model, MOI.Silent(), true)
     optimize!(space.model)
     result = CirclePackingResult(current.id, space.model, space.problem)
 
-    @show result
+    branching_scores = [(var_id, most_fractional_value(space, var_id)) for var_id in space.helper.original_binary_vars]
+  
+    best_candidate_score, best_candidate_pos = findmax(Iterators.map(elem -> last(elem), branching_scores))
+    best_candidate_var_id = first(branching_scores[best_candidate_pos])
 
-    # Create children with a branching algorithm.
+    @show  best_candidate_var_id, best_candidate_score
+
+    if best_candidate_score > 1e-3
+        left_lb_forward_changes = [NMK.MathOptState.LowerBoundVarChange(best_candidate_var_id, 1)]
+        left_ub_forward_changes = NMK.MathOptState.UpperBoundVarChange[]
+        left_local_forward_change = NMK.MathOptState.DomainChangeDiff(left_lb_forward_changes, left_ub_forward_changes)
+        left_forward_diff = NMK.MathOptState.merge_forward_change_diff(NMK.MathOptState.forward(current.state), left_local_forward_change)
+
+        left_lb_backward_changes = [NMK.MathOptState.LowerBoundVarChange(best_candidate_var_id, 0)]
+        left_ub_backward_changes = NMK.MathOptState.UpperBoundVarChange[]
+        left_local_backward_change = NMK.MathOptState.DomainChangeDiff(left_lb_backward_changes, left_ub_backward_changes)
+        left_backward_diff = NMK.MathOptState.merge_backward_change_diff(NMK.MathOptState.backward(current.state), left_local_backward_change)
+
+        left_state = NMK.MathOptState.new_state(space.tracker, left_forward_diff, left_backward_diff)
+
+        right_lb_forward_changes = NMK.MathOptState.LowerBoundVarChange[]
+        right_ub_forward_changes = [NMK.MathOptState.UpperBoundVarChange(best_candidate_var_id, 0)]
+        right_local_forward_change = NMK.MathOptState.DomainChangeDiff(right_lb_forward_changes, right_ub_forward_changes)
+        right_forward_diff = NMK.MathOptState.merge_forward_change_diff(NMK.MathOptState.forward(current.state), right_local_forward_change)
+
+        right_lb_backward_changes = NMK.MathOptState.LowerBoundVarChange[]
+        right_ub_backward_changes = [NMK.MathOptState.UpperBoundVarChange(best_candidate_var_id, 1)]
+        right_local_backward_change = NMK.MathOptState.DomainChangeDiff(right_lb_backward_changes, right_ub_backward_changes)
+        right_backward_diff = NMK.MathOptState.merge_backward_change_diff(NMK.MathOptState.backward(current.state), right_local_backward_change)
+
+        right_state = NMK.MathOptState.new_state(space.tracker, right_forward_diff, right_backward_diff)
+
+        println("--- backward ---")
+        NMK.MathOptState.apply_change!(JuMP.backend(space.model), NMK.MathOptState.backward(current.state), space.helper)
+        # Create children with a branching algorithm.
+        return CirclePackingNode[
+            CirclePackingNode(0, depth, 0, left_state),
+            CirclePackingNode(0, depth, 0, right_state)
+        ]
+    end
+
     return CirclePackingNode[]
 end
 
@@ -243,16 +302,20 @@ Solve the circle packing problem using JuMP and return the solution.
 """
 function solve_circle_packing(problem::CirclePackingProblem; time_limit_seconds::Float64=600.0)
     model = build_jump_model(problem)
+    tracker = NMK.MathOptState.DomainChangeTracker()
+    helper = NMK.MathOptState.transform_model!(tracker, JuMP.backend(model))
 
-    space = CirclePackingSearchSpace(
-        problem, model; node_limit=100
-    )
+    original_state = NMK.MathOptState.root_state(tracker, JuMP.backend(model))
+    relaxed_state = NMK.MathOptState.relax_integrality!(JuMP.backend(model), helper)
+    NMK.MathOptState.recover_state!(JuMP.backend(model), original_state, relaxed_state, helper)
+
+    root_state = NMK.MathOptState.root_state(tracker, JuMP.backend(model))
+
+    space = CirclePackingSearchSpace(problem, model, helper, root_state, tracker; node_limit=100)
 
     strategy = BestValueSearchStrategy()
     result = NMK.TreeSearch.search(strategy, space)
-
 end
-
 
 # Main execution
 function main()

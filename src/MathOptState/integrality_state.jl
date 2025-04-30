@@ -107,7 +107,6 @@ end
 #     vcat(parent_backward_diff.integrality_changes, local_backward_change.integrality_changes)
 # )
 
-
 new_state(::IntegralityStateTracker, backward::IntegralityChangeDiff, forward::IntegralityChangeDiff) = ModelState(backward, forward)
 
 function relax_integrality!(backend, helper::DomainChangeTrackerHelper)

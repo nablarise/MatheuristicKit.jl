@@ -104,8 +104,10 @@ function apply_change!(backend, change::LowerBoundVarChange, helper::DomainChang
     if isnothing(ci)
         new_ci = MOI.add_constraint(backend, change.var_id, MOI.GreaterThan(change.new_lb))
         helper.map_lb[change.var_id] = new_ci
+        @info "add constraint $(change.var_id) => $(change.new_lb)"
     else
         MOI.set(backend, MOI.ConstraintSet(), ci, MOI.GreaterThan(change.new_lb))
+         @info "set constraint to $(change.var_id) => $(change.new_lb)"
     end
     return
 end
@@ -144,8 +146,10 @@ function apply_change!(backend, change::UpperBoundVarChange, helper::DomainChang
     if isnothing(ci)
        new_ci = MOI.add_constraint(backend, change.var_id, MOI.LessThan(change.new_ub))
        helper.map_ub[change.var_id] = new_ci
+       @info "add constraint $(change.var_id) <= $(change.new_ub)"
     else
         MOI.set(backend, MOI.ConstraintSet(), ci, MOI.LessThan(change.new_ub))
+        @info "set constraint to $(change.var_id) <= $(change.new_ub)"
     end
     return
 end
@@ -162,6 +166,13 @@ Represents a collection of changes to variable domains (bounds).
 struct DomainChangeDiff <: AbstractMathOptStateDiff
     lower_bounds::Dict{ColId,LowerBoundVarChange}
     upper_bounds::Dict{ColId,UpperBoundVarChange}
+end
+
+function DomainChangeDiff(lb_changes::Vector{LowerBoundVarChange}, ub_changes::Vector{UpperBoundVarChange})
+    return DomainChangeDiff(
+        Dict(change.var_id.value => change for change in lb_changes),
+        Dict(change.var_id.value => change for change in ub_changes)
+    )
 end
 
 """
