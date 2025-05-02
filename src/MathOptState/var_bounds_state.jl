@@ -104,10 +104,10 @@ function apply_change!(backend, change::LowerBoundVarChange, helper::DomainChang
     if isnothing(ci)
         new_ci = MOI.add_constraint(backend, change.var_id, MOI.GreaterThan(change.new_lb))
         helper.map_lb[change.var_id] = new_ci
-        @info "add constraint $(change.var_id) => $(change.new_lb)"
+        @debug "add constraint $(change.var_id) => $(change.new_lb)"
     else
         MOI.set(backend, MOI.ConstraintSet(), ci, MOI.GreaterThan(change.new_lb))
-         @info "set constraint to $(change.var_id) => $(change.new_lb)"
+        @debug "set constraint to $(change.var_id) => $(change.new_lb)"
     end
     return
 end
@@ -146,10 +146,10 @@ function apply_change!(backend, change::UpperBoundVarChange, helper::DomainChang
     if isnothing(ci)
        new_ci = MOI.add_constraint(backend, change.var_id, MOI.LessThan(change.new_ub))
        helper.map_ub[change.var_id] = new_ci
-       @info "add constraint $(change.var_id) <= $(change.new_ub)"
+       @debug "add constraint $(change.var_id) <= $(change.new_ub)"
     else
         MOI.set(backend, MOI.ConstraintSet(), ci, MOI.LessThan(change.new_ub))
-        @info "set constraint to $(change.var_id) <= $(change.new_ub)"
+        @debug "set constraint to $(change.var_id) <= $(change.new_ub)"
     end
     return
 end
