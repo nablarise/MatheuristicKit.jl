@@ -9,16 +9,29 @@ This is used to efficiently apply and track changes to variable bounds in an opt
 - `map_lb`: Maps variable indices to their lower bound constraints
 - `map_ub`: Maps variable indices to their upper bound constraints
 - `map_eq`: Maps variable indices to their equality constraints
+- `is_integer`: Boolean indicating whether the variable is integer
+- `is_binary`: Boolean indicating whether the variable is binary
 """
 struct DomainChangeTrackerHelper
     map_lb::Dict{MOI.VariableIndex, MOI.ConstraintIndex{MOI.VariableIndex, MOI.GreaterThan{Float64}}}
     map_ub::Dict{MOI.VariableIndex, MOI.ConstraintIndex{MOI.VariableIndex, MOI.LessThan{Float64}}}
     map_eq::Dict{MOI.VariableIndex, MOI.ConstraintIndex{MOI.VariableIndex, MOI.EqualTo{Float64}}}
+    map_integer::Dict{MOI.VariableIndex, MOI.ConstraintIndex{MOI.VariableIndex, MOI.Integer}}
+    map_binary::Dict{MOI.VariableIndex, MOI.ConstraintIndex{MOI.VariableIndex, MOI.ZeroOne}}
+
+    # Store variable index of original integer and binary variables.
+    # Required to branch on a relaxed model.
+    original_integer_vars::Set{MOI.VariableIndex}
+    original_binary_vars::Set{MOI.VariableIndex}
     function DomainChangeTrackerHelper()
         return new(
             Dict{MOI.VariableIndex,MOI.ConstraintIndex{MOI.VariableIndex,MOI.GreaterThan{Float64}}}(),
             Dict{MOI.VariableIndex,MOI.ConstraintIndex{MOI.VariableIndex,MOI.LessThan{Float64}}}(),
-            Dict{MOI.VariableIndex,MOI.ConstraintIndex{MOI.VariableIndex,MOI.EqualTo{Float64}}}()
+            Dict{MOI.VariableIndex,MOI.ConstraintIndex{MOI.VariableIndex,MOI.EqualTo{Float64}}}(),
+            Dict{MOI.VariableIndex,MOI.ConstraintIndex{MOI.VariableIndex,MOI.Integer}}(),
+            Dict{MOI.VariableIndex,MOI.ConstraintIndex{MOI.VariableIndex,MOI.ZeroOne}}(),
+            Set{MOI.VariableIndex}(),
+            Set{MOI.VariableIndex}()
         )
     end
 end
@@ -26,60 +39,39 @@ end
 """
     _register_constraints!(helper, vi, ci)
 
-Register a constraint in the appropriate mapping in the helper.
-This is a fallback method that does nothing for constraint types not handled.
+Register a constraint on a single variable in the appropriate mapping in the helper.
 
 # Arguments
 - `helper`: The DomainChangeTrackerHelper to update
 - `vi`: Variable index
-- `ci`: Constraint index
+- `ci`: Constraint index involving only the variable `vi`.
 """
 _register_constraints!(helper, vi, ci) = nothing
 
-"""
-    _register_constraints!(helper, vi::F, ci::MOI.ConstraintIndex{F,S}) where {F<:MOI.VariableIndex,S<:MOI.GreaterThan}
-
-Register a lower bound constraint in the helper.
-
-# Arguments
-- `helper`: The DomainChangeTrackerHelper to update
-- `vi`: Variable index
-- `ci`: Lower bound constraint index
-"""
 function _register_constraints!(helper, vi::F, ci::MOI.ConstraintIndex{F,S}) where {F<:MOI.VariableIndex,S<:MOI.GreaterThan}
     helper.map_lb[vi] = ci
 end
 
-"""
-    _register_constraints!(helper, vi::F, ci::MOI.ConstraintIndex{F,S}) where {F<:MOI.VariableIndex,S<:MOI.LessThan}
-
-Register an upper bound constraint in the helper.
-
-# Arguments
-- `helper`: The DomainChangeTrackerHelper to update
-- `vi`: Variable index
-- `ci`: Upper bound constraint index
-"""
 function _register_constraints!(helper, vi::F, ci::MOI.ConstraintIndex{F,S}) where {F<:MOI.VariableIndex,S<:MOI.LessThan}
     helper.map_ub[vi] = ci
 end
 
-"""
-    _register_constraints!(helper, vi::F, ci::MOI.ConstraintIndex{F,S}) where {F<:MOI.VariableIndex,S<:MOI.EqualTo}
-
-Register an equality constraint in the helper.
-
-# Arguments
-- `helper`: The DomainChangeTrackerHelper to update
-- `vi`: Variable index
-- `ci`: Equality constraint index
-"""
 function _register_constraints!(helper, vi::F, ci::MOI.ConstraintIndex{F,S}) where {F<:MOI.VariableIndex,S<:MOI.EqualTo}
     helper.map_eq[vi] = ci
 end
 
+function _register_constraints!(helper, vi::F, ci::MOI.ConstraintIndex{F,S}) where {F<:MOI.VariableIndex,S<:MOI.Integer}
+    helper.map_integer[vi] = ci
+    push!(helper.original_integer_vars, vi)
+end
+
+function _register_constraints!(helper, vi::F, ci::MOI.ConstraintIndex{F,S}) where {F<:MOI.VariableIndex,S<:MOI.ZeroOne}
+    helper.map_binary[vi] = ci
+    push!(helper.original_binary_vars, vi)
+end
+
 """
-    LowerBoundVarChange <: AbstractAtomicChange
+    LowerBoundVarChange <: AbstractAtomicChange@
 
 Represents a change to the lower bound of a variable.
 
@@ -112,8 +104,10 @@ function apply_change!(backend, change::LowerBoundVarChange, helper::DomainChang
     if isnothing(ci)
         new_ci = MOI.add_constraint(backend, change.var_id, MOI.GreaterThan(change.new_lb))
         helper.map_lb[change.var_id] = new_ci
+        @debug "add constraint $(change.var_id) => $(change.new_lb)"
     else
         MOI.set(backend, MOI.ConstraintSet(), ci, MOI.GreaterThan(change.new_lb))
+        @debug "set constraint to $(change.var_id) => $(change.new_lb)"
     end
     return
 end
@@ -152,8 +146,10 @@ function apply_change!(backend, change::UpperBoundVarChange, helper::DomainChang
     if isnothing(ci)
        new_ci = MOI.add_constraint(backend, change.var_id, MOI.LessThan(change.new_ub))
        helper.map_ub[change.var_id] = new_ci
+       @debug "add constraint $(change.var_id) <= $(change.new_ub)"
     else
         MOI.set(backend, MOI.ConstraintSet(), ci, MOI.LessThan(change.new_ub))
+        @debug "set constraint to $(change.var_id) <= $(change.new_ub)"
     end
     return
 end
@@ -172,6 +168,13 @@ struct DomainChangeDiff <: AbstractMathOptStateDiff
     upper_bounds::Dict{ColId,UpperBoundVarChange}
 end
 
+function DomainChangeDiff(lb_changes::Vector{LowerBoundVarChange}, ub_changes::Vector{UpperBoundVarChange})
+    return DomainChangeDiff(
+        Dict(change.var_id.value => change for change in lb_changes),
+        Dict(change.var_id.value => change for change in ub_changes)
+    )
+end
+
 """
     DomainChangeDiff()
 
@@ -182,7 +185,7 @@ A new empty `DomainChangeDiff`.
 """
 DomainChangeDiff() = DomainChangeDiff(
     Dict{ColId,LowerBoundVarChange}(),
-    Dict{ColId,UpperBoundVarChange}()
+    Dict{ColId,UpperBoundVarChange}(),
 )
 
 """
@@ -260,7 +263,6 @@ function apply_change!(backend, diff::DomainChangeDiff, helper)
     end
     return
 end
-
 
 """
     DomainChangeTracker <: AbstractMathOptStateTracker

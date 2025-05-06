@@ -198,5 +198,6 @@ function new_state end
 include("var_bounds_state.jl")
 include("cut_rhs_state.jl")
 include("fixed_var_state.jl")
+include("integrality_state.jl")
 
 end # module MathOptState

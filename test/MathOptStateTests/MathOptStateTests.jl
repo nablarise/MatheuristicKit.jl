@@ -527,11 +527,210 @@ function test_math_opt_state3()
     end
 end
 
+function test_domain_change_tracker_continuous()
+    model = Model(GLPK.Optimizer)
+    @variable(model, x >= 0)
+    @variable(model, 0 <= y <= 3)
+
+    @objective(model, Min, x + y)
+
+    tracker = NMK.MathOptState.DomainChangeTracker()
+    helper = NMK.MathOptState.transform_model!(tracker, JuMP.backend(model))
+
+    @test JuMP.index(x) in keys(helper.map_lb)
+    @test JuMP.index(y) in keys(helper.map_lb)
+    @test length(helper.map_lb) == 2
+
+    @test JuMP.index(y) in keys(helper.map_ub)
+    @test length(helper.map_ub) == 1
+
+    @test isempty(helper.map_eq)
+    @test isempty(helper.map_binary)
+    @test isempty(helper.map_integer)
+    @test isempty(helper.original_binary_vars)
+    @test isempty(helper.original_integer_vars)
+    return
+end
+
+function test_domain_change_tracker_binary()
+    model = Model(GLPK.Optimizer)
+    @variable(model, x, Bin)
+    @variable(model, 0 <= y <= 1, Bin)
+
+    @objective(model, Min, x + y)
+
+    tracker = NMK.MathOptState.DomainChangeTracker()
+    helper = NMK.MathOptState.transform_model!(tracker, JuMP.backend(model))
+
+    @test JuMP.index(y) in keys(helper.map_lb)
+    @test length(helper.map_lb) == 1
+
+    @test JuMP.index(y) in keys(helper.map_ub)
+    @test length(helper.map_ub) == 1
+
+    @test isempty(helper.map_eq)
+    @test JuMP.index(x) in keys(helper.map_binary)
+    @test JuMP.index(y) in keys(helper.map_binary)
+    @test isempty(helper.map_integer)
+
+    @test JuMP.index(x) in helper.original_binary_vars
+    @test JuMP.index(y) in helper.original_binary_vars
+    @test isempty(helper.original_integer_vars)
+
+    # What happens when we relax ?
+    undo_relax = JuMP.relax_integrality(model)
+
+    @test !MOI.is_valid(JuMP.backend(model), helper.map_binary[JuMP.index(x)])
+    @test !MOI.is_valid(JuMP.backend(model), helper.map_binary[JuMP.index(y)])
+
+    @test MOI.is_valid(JuMP.backend(model), helper.map_lb[JuMP.index(y)])
+    @test MOI.is_valid(JuMP.backend(model), helper.map_ub[JuMP.index(y)])
+    return
+end
+
+function test_domain_change_tracker_integer()
+    model = Model(GLPK.Optimizer)
+    @variable(model, x >= 0, Int)
+    @variable(model, 0 <= y <= 9, Int)
+
+    @objective(model, Min, x + y)
+
+    tracker = NMK.MathOptState.DomainChangeTracker()
+    helper = NMK.MathOptState.transform_model!(tracker, JuMP.backend(model))
+
+    @test JuMP.index(x) in keys(helper.map_lb)
+    @test JuMP.index(y) in keys(helper.map_lb)
+    @test length(helper.map_lb) == 2
+
+    @test JuMP.index(y) in keys(helper.map_ub)
+    @test length(helper.map_ub) == 1
+
+    @test isempty(helper.map_eq)
+    @test isempty(helper.map_binary)
+    @test JuMP.index(x) in keys(helper.map_integer)
+    @test JuMP.index(y) in keys(helper.map_integer)
+
+    @test JuMP.index(x) in helper.original_integer_vars
+    @test JuMP.index(y) in helper.original_integer_vars
+    @test isempty(helper.original_binary_vars)
+
+    # What happens when we relax ?
+    undo_relax = JuMP.relax_integrality(model)
+
+    @test !MOI.is_valid(JuMP.backend(model), helper.map_integer[JuMP.index(x)])
+    @test !MOI.is_valid(JuMP.backend(model), helper.map_integer[JuMP.index(y)])
+    return
+end
+
+function test_relax_integrality()
+    model = JuMP.Model()
+    @variable(model, 1 <= w <= 5)
+    @variable(model, x, Bin)
+    @variable(model, 0 <= y <= 2, Bin)
+    @variable(model, z >= 2, Int)
+
+    tracker = NMK.MathOptState.DomainChangeTracker()
+    helper = NMK.MathOptState.transform_model!(tracker, JuMP.backend(model))
+
+    integral_state = NMK.MathOptState.root_state(tracker, JuMP.backend(model))
+    integrality_relaxation_state = NMK.MathOptState.relax_integrality!(JuMP.backend(model), helper)
+
+    relax_var_2 = false
+    relax_var_3 = false
+    relax_var_4 = false
+
+    for change in integrality_relaxation_state.forward_diff.integrality_changes
+        if change.var_id.value == 2
+            @test change.change == NMK.MathOptState.relax_zero_one
+            relax_var_2 = true
+        elseif change.var_id.value == 3
+            @test change.change == NMK.MathOptState.relax_zero_one
+            relax_var_3 = true
+        elseif change.var_id.value == 4
+            @test change.change == NMK.MathOptState.relax_integrality
+            relax_var_4 = true
+        end
+    end
+
+    @test relax_var_2
+    @test relax_var_3
+    @test relax_var_4
+
+    restrict_var_2 = false
+    restrict_var_3 = false
+    restrict_var_4 = false
+
+    for change in integrality_relaxation_state.backward_diff.integrality_changes
+        if change.var_id.value == 2
+            @test change.change == NMK.MathOptState.restrict_zero_one
+            restrict_var_2 = true
+        elseif change.var_id.value == 3
+            @test change.change == NMK.MathOptState.restrict_zero_one
+            restrict_var_3 = true
+        elseif change.var_id.value == 4
+            @test change.change == NMK.MathOptState.restrict_integrality
+            restrict_var_4 = true
+        end
+    end
+
+    @test restrict_var_2
+    @test restrict_var_3
+    @test restrict_var_4
+
+    NMK.MathOptState.recover_state!(JuMP.backend(model), integral_state, integrality_relaxation_state, helper)
+
+    @test !JuMP.is_binary(w)
+    @test !JuMP.is_integer(w)
+    @test JuMP.has_lower_bound(w) && JuMP.lower_bound(w) == 1
+    @test JuMP.has_upper_bound(w) && JuMP.upper_bound(w) == 5
+    
+    @test !JuMP.is_binary(x)
+    @test !JuMP.is_integer(x)
+    @test JuMP.has_lower_bound(x) && JuMP.lower_bound(x) == 0
+    @test JuMP.has_upper_bound(x) && JuMP.upper_bound(x) == 1
+
+    @test !JuMP.is_binary(y)
+    @test !JuMP.is_integer(y)
+    @test JuMP.has_lower_bound(y) && JuMP.lower_bound(y) == 0
+    @test JuMP.has_upper_bound(y) && JuMP.upper_bound(y) == 1
+
+    @test !JuMP.is_binary(z)
+    @test !JuMP.is_integer(z)
+    @test JuMP.has_lower_bound(z) && JuMP.lower_bound(z) == 2
+    @test !JuMP.has_upper_bound(z)
+
+    NMK.MathOptState.recover_state!(JuMP.backend(model), integrality_relaxation_state, integral_state, helper)
+
+    @test !JuMP.is_binary(w)
+    @test !JuMP.is_integer(w)
+    @test JuMP.has_lower_bound(w) && JuMP.lower_bound(w) == 1
+    @test JuMP.has_upper_bound(w) && JuMP.upper_bound(w) == 5
+    
+    @test JuMP.is_binary(x)
+    @test !JuMP.is_integer(x)
+    @test JuMP.has_lower_bound(x) && JuMP.lower_bound(x) == 0
+    @test JuMP.has_upper_bound(x) && JuMP.upper_bound(x) == 1
+
+    @test JuMP.is_binary(y)
+    @test !JuMP.is_integer(y)
+    @test JuMP.has_lower_bound(y) && JuMP.lower_bound(y) == 0
+    @test JuMP.has_upper_bound(y) && JuMP.upper_bound(y) == 1
+
+    @test !JuMP.is_binary(z)
+    @test JuMP.is_integer(z)
+    @test JuMP.has_lower_bound(z) && JuMP.lower_bound(z) == 2
+    @test !JuMP.has_upper_bound(z)
+end
+
 function run()
     @testset "MathOptStateTests" begin
         test_math_opt_state1()
         test_math_opt_state2()
         test_math_opt_state3()
+        test_domain_change_tracker_continuous()
+        test_domain_change_tracker_binary()
+        test_domain_change_tracker_integer()
+        test_relax_integrality()
     end
 end
 end # end module
