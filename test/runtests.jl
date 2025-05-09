@@ -24,7 +24,7 @@ using NablaMatheuristicKit
 ########
 
 ######## Step 3: use test modules
-using MathOptStateTests, TreeSearchTests
+using MathOptStateTests, TreeSearchTests, BranchingTests
 ########
 
 # Load the script that contains the method that tracks the changes and runs
@@ -40,7 +40,8 @@ MODULES_TO_TRACK = [
 ######## Step 5: Put all the test modules to track and run here.
 TEST_MODULES_TO_TRACK_AND_RUN = [
     MathOptStateTests,
-    TreeSearchTests
+    TreeSearchTests,
+    BranchingTests
 ]
 ########
 
