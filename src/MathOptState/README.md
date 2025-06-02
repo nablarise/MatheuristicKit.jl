@@ -52,10 +52,10 @@ MathOptState provides implementations for tracking several types of model change
 
 ```julia
 using JuMP, MathOptInterface, GLPK
-using NablaMatheuristicKit
+using MatheuristicKit
 
 const MOI = MathOptInterface
-const NMK = NablaMatheuristicKit
+const MK = MatheuristicKit
 
 # Create a model
 model = JuMP.direct_model(GLPK.Optimizer())
@@ -63,13 +63,13 @@ model = JuMP.direct_model(GLPK.Optimizer())
 @objective(model, Min, x)
 
 # Create a state tracker
-tracker = NMK.MathOptState.DomainChangeTracker()
+tracker = MK.MathOptState.DomainChangeTracker()
 
 # Transform the model for tracking (registers existing constraints)
-helper = NMK.MathOptState.transform_model!(tracker, JuMP.backend(model))
+helper = MK.MathOptState.transform_model!(tracker, JuMP.backend(model))
 
 # Get the root state
-root_state = NMK.MathOptState.root_state(tracker, JuMP.backend(model))
+root_state = MK.MathOptState.root_state(tracker, JuMP.backend(model))
 
 optimize!(model)
 @show JuMP.objective_value(model)
@@ -79,31 +79,31 @@ optimize!(model)
 # In this new state, we want 2 <= x <= 3
 
 # Forward change to move from the current state to the new state
-lb_changes = Dict(JuMP.index(x).value => NMK.MathOptState.LowerBoundVarChange(JuMP.index(x), 2.0))
+lb_changes = Dict(JuMP.index(x).value => MK.MathOptState.LowerBoundVarChange(JuMP.index(x), 2.0))
 ub_changes = Dict()
-forward_local_change = NMK.MathOptState.DomainChangeDiff(lb_changes, ub_changes)
+forward_local_change = MK.MathOptState.DomainChangeDiff(lb_changes, ub_changes)
 
 # Merge with the forward change of the root state (local changes == global changes in this special case)
-forward_change = NMK.MathOptState.merge_forward_change_diff(NMK.MathOptState.forward(root_state), forward_local_change)
+forward_change = MK.MathOptState.merge_forward_change_diff(MK.MathOptState.forward(root_state), forward_local_change)
 
 # Backward change to move from the new state to the current state
-lb_changes = Dict(JuMP.index(x).value => NMK.MathOptState.LowerBoundVarChange(JuMP.index(x), 0.0))
+lb_changes = Dict(JuMP.index(x).value => MK.MathOptState.LowerBoundVarChange(JuMP.index(x), 0.0))
 ub_changes = Dict()
-backward_local_change = NMK.MathOptState.DomainChangeDiff(lb_changes, ub_changes)
+backward_local_change = MK.MathOptState.DomainChangeDiff(lb_changes, ub_changes)
 
 # Merge with the backward change of the root state (local changes == global changes in this special case)
-backward_change = NMK.MathOptState.merge_backward_change_diff(NMK.MathOptState.backward(root_state), backward_local_change)
+backward_change = MK.MathOptState.merge_backward_change_diff(MK.MathOptState.backward(root_state), backward_local_change)
 
 # Create the new state
-new_state = NMK.MathOptState.new_state(tracker, forward_change, backward_change)
+new_state = MK.MathOptState.new_state(tracker, forward_change, backward_change)
 
 # Navigate between states
-NMK.MathOptState.recover_state!(JuMP.backend(model), root_state, new_state, helper)
+MK.MathOptState.recover_state!(JuMP.backend(model), root_state, new_state, helper)
 optimize!(model)
 @show JuMP.objective_value(model)
 @show JuMP.value(x)
 
-NMK.MathOptState.recover_state!(JuMP.backend(model), new_state, root_state, helper)
+MK.MathOptState.recover_state!(JuMP.backend(model), new_state, root_state, helper)
 optimize!(model)
 @show JuMP.objective_value(model)
 @show JuMP.value(x)

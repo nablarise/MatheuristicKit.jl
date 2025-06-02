@@ -1,7 +1,7 @@
 module BranchingTests
 
-using Test, NablaMatheuristicKit, JuMP, GLPK
-const NMK = NablaMatheuristicKit
+using Test, MatheuristicKit, JuMP, GLPK
+const MK = MatheuristicKit
 
 # pour le strong branching, je dois pouvoir évaluer des noeuds avec un algo.
 # génrer les candidats
@@ -22,8 +22,8 @@ function test_most_fractional_branching()
     optimize!(model)
     @show JuMP.value.(x)
 
-    branching = NMK.Branching.MostFractionalOrder()
-    candidates = NMK.Branching.get_candidates(model, branching)
+    branching = MK.Branching.MostFractionalOrder()
+    candidates = MK.Branching.get_candidates(model, branching)
     @show candidates
 
 end

@@ -20,9 +20,9 @@ function test_depth_first_search()
         return current.id - space.last_evaluated_node_id == expected_diff
     end
 
-    strategy = NMK.TreeSearch.DepthFirstSearchStrategy()
+    strategy = MK.TreeSearch.DepthFirstSearchStrategy()
     search_space = MockSearchSpace(test_function)
-    output = NMK.TreeSearch.search(strategy, search_space)
+    output = MK.TreeSearch.search(strategy, search_space)
     @test output.last_evaluated_node_id == 10
     @test output.nb_evaluated_node == 6
 

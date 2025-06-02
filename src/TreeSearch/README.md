@@ -1,6 +1,6 @@
 # TreeSearch
 
-A flexible and extensible tree search framework for Julia, part of the NablaMatheuristicKit package. This module provides implementations of common tree search algorithms for solving combinatorial optimization problems.
+A flexible and extensible tree search framework for Julia, part of the MatheuristicKit package. This module provides implementations of common tree search algorithms for solving combinatorial optimization problems.
 
 ## Overview
 

@@ -20,7 +20,7 @@ using Revise
 using Test
 
 ######## Step 2: set the name of your app.
-using NablaMatheuristicKit
+using MatheuristicKit
 ########
 
 ######## Step 3: use test modules
@@ -33,7 +33,7 @@ include("revise.jl")
 
 ######## Step 4: Put all the modules to track here.
 MODULES_TO_TRACK = [
-    NablaMatheuristicKit
+    MatheuristicKit
 ]
 ########
 

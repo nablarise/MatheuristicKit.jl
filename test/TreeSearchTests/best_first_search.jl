@@ -1,8 +1,8 @@
-struct BestFirstSearchStrategy <: NMK.TreeSearch.AbstractBestFirstSearchStrategy
+struct BestFirstSearchStrategy <: MK.TreeSearch.AbstractBestFirstSearchStrategy
     scores::Dict{Int,Int} # node_id -> score
 end
 
-NMK.TreeSearch.get_priority(strategy::BestFirstSearchStrategy, ::MockSearchSpace, node::MockNode) = -strategy.scores[node.id]
+MK.TreeSearch.get_priority(strategy::BestFirstSearchStrategy, ::MockSearchSpace, node::MockNode) = -strategy.scores[node.id]
 
 function test_best_first_search()
     ##########################
@@ -50,7 +50,7 @@ function test_best_first_search()
     )
     strategy = BestFirstSearchStrategy(scores)
     search_space = MockSearchSpace(test_function; node_limit=6)
-    output = NMK.TreeSearch.search(strategy, search_space)
+    output = MK.TreeSearch.search(strategy, search_space)
 
     @test output.last_evaluated_node_id == 10
     @test output.nb_evaluated_node == 6
