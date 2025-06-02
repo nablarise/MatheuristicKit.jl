@@ -9,7 +9,7 @@ const RowId = Int
 # Branching rules
 
 # Provide an order for variables, the first one is selected for branching.
-struct AbstractOrder end
+abstract type AbstractOrder end
 
 
 struct NaturalOrder <: AbstractOrder end
@@ -21,8 +21,8 @@ struct Candidate{ListOfNodes}
     children::ListOfNodes # if necessary (e.g. strong branching)
 end
 
-function get_candidates(generic_model)
-    return candidates
+function get_candidates(generic_model, order::AbstractOrder)
+    return nothing
 end
 
 
