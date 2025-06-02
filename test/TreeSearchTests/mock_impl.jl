@@ -1,4 +1,4 @@
-mutable struct MockSearchSpace <: NMK.TreeSearch.AbstractSearchSpace
+mutable struct MockSearchSpace <: MK.TreeSearch.AbstractSearchSpace
     node_limit::Int # number of evaluated nodes
     nb_nodes_evaluated::Int
     last_evaluated_node_id::Int
@@ -25,10 +25,10 @@ struct MockResult{T}
     open_nodes::T
 end
 
-NMK.TreeSearch.new_root(space::MockSearchSpace) = MockNode(1, 1)
-NMK.TreeSearch.stop(space::MockSearchSpace, untreated_nodes) = space.nb_nodes_evaluated >= space.node_limit
+MK.TreeSearch.new_root(space::MockSearchSpace) = MockNode(1, 1)
+MK.TreeSearch.stop(space::MockSearchSpace, untreated_nodes) = space.nb_nodes_evaluated >= space.node_limit
 
-function NMK.TreeSearch.children(space::MockSearchSpace, current::MockNode)
+function MK.TreeSearch.children(space::MockSearchSpace, current::MockNode)
     @test space.test_function(space, current)
     space.nb_nodes_evaluated += 1
     space.last_evaluated_node_id = current.id
@@ -39,7 +39,7 @@ function NMK.TreeSearch.children(space::MockSearchSpace, current::MockNode)
     return MockNode[]
 end
 
-function NMK.TreeSearch.output(space::MockSearchSpace, untreated_nodes)
+function MK.TreeSearch.output(space::MockSearchSpace, untreated_nodes)
     return MockResult(
         space.last_evaluated_node_id,
         space.nb_nodes_evaluated,

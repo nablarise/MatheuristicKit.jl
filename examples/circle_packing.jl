@@ -7,9 +7,9 @@ using Ipopt
 using LinearAlgebra
 using Random
 using JSON3
-using NablaMatheuristicKit
+using MatheuristicKit
 
-const NMK = NablaMatheuristicKit
+const MK = MatheuristicKit
 
 """
     CirclePackingProblem
@@ -156,12 +156,12 @@ end
 
 ################################################
 
-mutable struct CirclePackingSearchSpace <: NMK.TreeSearch.AbstractSearchSpace
+mutable struct CirclePackingSearchSpace <: MK.TreeSearch.AbstractSearchSpace
     node_limit::Int
     nb_nodes_evaluated::Int
     problem::CirclePackingProblem
     model::JuMP.Model
-    helper::NMK.MathOptState.DomainChangeTrackerHelper
+    helper::MK.MathOptState.DomainChangeTrackerHelper
     root_state
     tracker
     var_names::Dict{MOI.VariableIndex, String}
@@ -174,7 +174,7 @@ end
 function CirclePackingSearchSpace(
     problem::CirclePackingProblem, 
     model::JuMP.Model, 
-    helper::NMK.MathOptState.DomainChangeTrackerHelper,
+    helper::MK.MathOptState.DomainChangeTrackerHelper,
     root_state,
     tracker; 
     node_limit=1000
@@ -237,12 +237,12 @@ function most_fractional_value(space, var_id)
     return 2 * abs(round(val) - val)
 end
 
-NMK.TreeSearch.new_root(space::CirclePackingSearchSpace) = CirclePackingNode(1, 0, 0.0, space.root_state)
-NMK.TreeSearch.stop(space::CirclePackingSearchSpace, untreated_nodes) = space.nb_nodes_evaluated >= space.node_limit || isempty(untreated_nodes)
+MK.TreeSearch.new_root(space::CirclePackingSearchSpace) = CirclePackingNode(1, 0, 0.0, space.root_state)
+MK.TreeSearch.stop(space::CirclePackingSearchSpace, untreated_nodes) = space.nb_nodes_evaluated >= space.node_limit || isempty(untreated_nodes)
 
-function NMK.TreeSearch.children(space::CirclePackingSearchSpace, current::CirclePackingNode)
+function MK.TreeSearch.children(space::CirclePackingSearchSpace, current::CirclePackingNode)
     println("--- node depth = $(current.depth)")
-    NMK.MathOptState.apply_change!(JuMP.backend(space.model), NMK.MathOptState.forward(current.state), space.helper)
+    MK.MathOptState.apply_change!(JuMP.backend(space.model), MK.MathOptState.forward(current.state), space.helper)
     space.nb_nodes_evaluated += 1
     depth = current.depth + 1
     
@@ -269,7 +269,7 @@ function NMK.TreeSearch.children(space::CirclePackingSearchSpace, current::Circl
         # Update node label to indicate infeasibility
         space.dot_nodes[current_node_id] = "Node $(current_node_id)\nDepth: $(current.depth)\nINFEASIBLE"
         
-        NMK.MathOptState.apply_change!(JuMP.backend(space.model), NMK.MathOptState.backward(current.state), space.helper)
+        MK.MathOptState.apply_change!(JuMP.backend(space.model), MK.MathOptState.backward(current.state), space.helper)
         return CirclePackingNode[]
     end
 
@@ -286,29 +286,29 @@ function NMK.TreeSearch.children(space::CirclePackingSearchSpace, current::Circl
         # Get variable name for better labeling
         var_name = get(space.var_names, best_candidate_var_id, string(best_candidate_var_id))
         
-        left_lb_forward_changes = [NMK.MathOptState.LowerBoundVarChange(best_candidate_var_id, 1)]
-        left_ub_forward_changes = NMK.MathOptState.UpperBoundVarChange[]
-        left_local_forward_change = NMK.MathOptState.DomainChangeDiff(left_lb_forward_changes, left_ub_forward_changes)
-        left_forward_diff = NMK.MathOptState.merge_forward_change_diff(NMK.MathOptState.forward(current.state), left_local_forward_change)
+        left_lb_forward_changes = [MK.MathOptState.LowerBoundVarChange(best_candidate_var_id, 1)]
+        left_ub_forward_changes = MK.MathOptState.UpperBoundVarChange[]
+        left_local_forward_change = MK.MathOptState.DomainChangeDiff(left_lb_forward_changes, left_ub_forward_changes)
+        left_forward_diff = MK.MathOptState.merge_forward_change_diff(MK.MathOptState.forward(current.state), left_local_forward_change)
 
-        left_lb_backward_changes = [NMK.MathOptState.LowerBoundVarChange(best_candidate_var_id, 0)]
-        left_ub_backward_changes = NMK.MathOptState.UpperBoundVarChange[]
-        left_local_backward_change = NMK.MathOptState.DomainChangeDiff(left_lb_backward_changes, left_ub_backward_changes)
-        left_backward_diff = NMK.MathOptState.merge_backward_change_diff(NMK.MathOptState.backward(current.state), left_local_backward_change)
+        left_lb_backward_changes = [MK.MathOptState.LowerBoundVarChange(best_candidate_var_id, 0)]
+        left_ub_backward_changes = MK.MathOptState.UpperBoundVarChange[]
+        left_local_backward_change = MK.MathOptState.DomainChangeDiff(left_lb_backward_changes, left_ub_backward_changes)
+        left_backward_diff = MK.MathOptState.merge_backward_change_diff(MK.MathOptState.backward(current.state), left_local_backward_change)
 
-        left_state = NMK.MathOptState.new_state(space.tracker, left_forward_diff, left_backward_diff)
+        left_state = MK.MathOptState.new_state(space.tracker, left_forward_diff, left_backward_diff)
 
-        right_lb_forward_changes = NMK.MathOptState.LowerBoundVarChange[]
-        right_ub_forward_changes = [NMK.MathOptState.UpperBoundVarChange(best_candidate_var_id, 0)]
-        right_local_forward_change = NMK.MathOptState.DomainChangeDiff(right_lb_forward_changes, right_ub_forward_changes)
-        right_forward_diff = NMK.MathOptState.merge_forward_change_diff(NMK.MathOptState.forward(current.state), right_local_forward_change)
+        right_lb_forward_changes = MK.MathOptState.LowerBoundVarChange[]
+        right_ub_forward_changes = [MK.MathOptState.UpperBoundVarChange(best_candidate_var_id, 0)]
+        right_local_forward_change = MK.MathOptState.DomainChangeDiff(right_lb_forward_changes, right_ub_forward_changes)
+        right_forward_diff = MK.MathOptState.merge_forward_change_diff(MK.MathOptState.forward(current.state), right_local_forward_change)
 
-        right_lb_backward_changes = NMK.MathOptState.LowerBoundVarChange[]
-        right_ub_backward_changes = [NMK.MathOptState.UpperBoundVarChange(best_candidate_var_id, 1)]
-        right_local_backward_change = NMK.MathOptState.DomainChangeDiff(right_lb_backward_changes, right_ub_backward_changes)
-        right_backward_diff = NMK.MathOptState.merge_backward_change_diff(NMK.MathOptState.backward(current.state), right_local_backward_change)
+        right_lb_backward_changes = MK.MathOptState.LowerBoundVarChange[]
+        right_ub_backward_changes = [MK.MathOptState.UpperBoundVarChange(best_candidate_var_id, 1)]
+        right_local_backward_change = MK.MathOptState.DomainChangeDiff(right_lb_backward_changes, right_ub_backward_changes)
+        right_backward_diff = MK.MathOptState.merge_backward_change_diff(MK.MathOptState.backward(current.state), right_local_backward_change)
 
-        right_state = NMK.MathOptState.new_state(space.tracker, right_forward_diff, right_backward_diff)
+        right_state = MK.MathOptState.new_state(space.tracker, right_forward_diff, right_backward_diff)
 
         # Create child nodes with unique IDs
         left_node_id = space.next_node_id
@@ -335,12 +335,12 @@ function NMK.TreeSearch.children(space::CirclePackingSearchSpace, current::Circl
         generate_dot_file(space)
     end
 
-    NMK.MathOptState.apply_change!(JuMP.backend(space.model), NMK.MathOptState.backward(current.state), space.helper)
+    MK.MathOptState.apply_change!(JuMP.backend(space.model), MK.MathOptState.backward(current.state), space.helper)
 
     return children
 end
 
-function NMK.TreeSearch.output(space::CirclePackingSearchSpace, untreated_nodes)
+function MK.TreeSearch.output(space::CirclePackingSearchSpace, untreated_nodes)
     # Generate final DOT file
     generate_dot_file(space)
     return nothing
@@ -389,9 +389,9 @@ function generate_dot_file(space::CirclePackingSearchSpace)
     return dot_file_path
 end
 
-struct BestValueSearchStrategy <: NMK.TreeSearch.AbstractBestFirstSearchStrategy end
+struct BestValueSearchStrategy <: MK.TreeSearch.AbstractBestFirstSearchStrategy end
 
-function NMK.TreeSearch.get_priority(::BestValueSearchStrategy, space::CirclePackingSearchSpace, node::CirclePackingNode)
+function MK.TreeSearch.get_priority(::BestValueSearchStrategy, space::CirclePackingSearchSpace, node::CirclePackingNode)
     return node.value_guess
 end
 
@@ -409,19 +409,19 @@ Solve the circle packing problem using JuMP and return the solution.
 """
 function solve_circle_packing(problem::CirclePackingProblem; time_limit_seconds::Float64=600.0)
     model = build_jump_model(problem)
-    tracker = NMK.MathOptState.DomainChangeTracker()
-    helper = NMK.MathOptState.transform_model!(tracker, JuMP.backend(model))
+    tracker = MK.MathOptState.DomainChangeTracker()
+    helper = MK.MathOptState.transform_model!(tracker, JuMP.backend(model))
 
-    original_state = NMK.MathOptState.root_state(tracker, JuMP.backend(model))
-    relaxed_state = NMK.MathOptState.relax_integrality!(JuMP.backend(model), helper)
-    NMK.MathOptState.recover_state!(JuMP.backend(model), original_state, relaxed_state, helper)
+    original_state = MK.MathOptState.root_state(tracker, JuMP.backend(model))
+    relaxed_state = MK.MathOptState.relax_integrality!(JuMP.backend(model), helper)
+    MK.MathOptState.recover_state!(JuMP.backend(model), original_state, relaxed_state, helper)
 
-    root_state = NMK.MathOptState.root_state(tracker, JuMP.backend(model))
+    root_state = MK.MathOptState.root_state(tracker, JuMP.backend(model))
 
     space = CirclePackingSearchSpace(problem, model, helper, root_state, tracker; node_limit=1000)
 
     strategy = BestValueSearchStrategy()
-    result = NMK.TreeSearch.search(strategy, space)
+    result = MK.TreeSearch.search(strategy, space)
 end
 
 # Main execution

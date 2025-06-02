@@ -1,7 +1,7 @@
 module TreeSearchTests
 
-using Test, NablaMatheuristicKit, Revise, DataStructures
-const NMK = NablaMatheuristicKit
+using Test, MatheuristicKit, Revise, DataStructures
+const MK = MatheuristicKit
 
 include("mock_impl.jl")
 include("search_strategy.jl")

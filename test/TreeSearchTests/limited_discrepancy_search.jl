@@ -50,12 +50,12 @@ function test_limited_discrepancy_search1()
         return previous_node_id[current.id] == space.last_evaluated_node_id
     end
 
-    strategy = NMK.TreeSearch.LimitedDiscrepancySearchStrategy(
-        NMK.TreeSearch.DepthFirstSearchStrategy(),
+    strategy = MK.TreeSearch.LimitedDiscrepancySearchStrategy(
+        MK.TreeSearch.DepthFirstSearchStrategy(),
         3 # max discrepancy.
     )
     search_space = MockSearchSpace(test_function; node_limit=100, nb_children_per_node=3, max_depth=4)
-    output = NMK.TreeSearch.search(strategy, search_space)
+    output = MK.TreeSearch.search(strategy, search_space)
 
     @test output.last_evaluated_node_id == 29
     @test output.nb_evaluated_node == 20

@@ -1,7 +1,7 @@
-struct MockBeamSearchStrategy <: NMK.TreeSearch.AbstractBestFirstSearchStrategy
+struct MockBeamSearchStrategy <: MK.TreeSearch.AbstractBestFirstSearchStrategy
     scores::Dict{Int,Int}
 end
-NMK.TreeSearch.get_priority(strategy::MockBeamSearchStrategy, ::MockSearchSpace, node::MockNode) = strategy.scores[node.id]
+MK.TreeSearch.get_priority(strategy::MockBeamSearchStrategy, ::MockSearchSpace, node::MockNode) = strategy.scores[node.id]
 
 function test_beam_search_strategy()
     ##########################
@@ -56,9 +56,9 @@ function test_beam_search_strategy()
         16 => 0,
     )
 
-    strategy = NMK.TreeSearch.BeamSearchStrategy(MockBeamSearchStrategy(scores), 2) # beam width.
+    strategy = MK.TreeSearch.BeamSearchStrategy(MockBeamSearchStrategy(scores), 2) # beam width.
     search_space = MockSearchSpace(test_function; node_limit=100, nb_children_per_node=3, max_depth=4)
-    output = NMK.TreeSearch.search(strategy, search_space)
+    output = MK.TreeSearch.search(strategy, search_space)
 
     return
 end

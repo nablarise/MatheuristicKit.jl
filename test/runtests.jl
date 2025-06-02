@@ -20,11 +20,11 @@ using Revise
 using Test
 
 ######## Step 2: set the name of your app.
-using NablaMatheuristicKit
+using MatheuristicKit
 ########
 
 ######## Step 3: use test modules
-using MathOptStateTests, TreeSearchTests
+using MathOptStateTests, TreeSearchTests, BranchingTests
 ########
 
 # Load the script that contains the method that tracks the changes and runs
@@ -33,14 +33,15 @@ include("revise.jl")
 
 ######## Step 4: Put all the modules to track here.
 MODULES_TO_TRACK = [
-    NablaMatheuristicKit
+    MatheuristicKit
 ]
 ########
 
 ######## Step 5: Put all the test modules to track and run here.
 TEST_MODULES_TO_TRACK_AND_RUN = [
     MathOptStateTests,
-    TreeSearchTests
+    TreeSearchTests,
+    BranchingTests
 ]
 ########
 
