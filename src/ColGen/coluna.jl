@@ -6,6 +6,22 @@
 # To comply with MPL 2.0 license, 
 # this entire file is licensed under MPL 2.0
 
+function new_phase_iterator end
+function initial_phase end
+function new_stage_iterator end
+function initial_stage end
+function setup_stabilization! end
+
+function stop_colgen end
+function setup_reformulation! end
+function setup_context! end
+
+function next_phase end
+function next_stage end
+
+function colgen_output_type end
+function new_output end
+
 """
     run!(ctx, ip_primal_sol; iter = 1) -> AbstractColGenOutput
 
@@ -37,6 +53,13 @@ function run!(context, ip_primal_sol; iter = 1)
     O = colgen_output_type(context)
     return new_output(O, phase_output)
 end
+
+
+function stop_colgen_phase end
+function before_colgen_iteration end
+function is_better_dual_bound end
+function colgen_phase_output_type end
+function new_phase_output end
 
 """
     run_colgen_phase!(ctx, phase, stage, ip_primal_sol, stab; iter = 1) -> AbstractColGenPhaseOutput
@@ -72,6 +95,55 @@ function run_colgen_phase!(context, phase, stage, ip_primal_sol, stab; iter = 1)
     return new_phase_output(O, is_minimization(context), phase, stage, colgen_iter_output, iteration, incumbent_dual_bound)
 end
 
+function colgen_iteration_output_type end
+function optimize_master_lp_problem! end
+function update_master_constrs_dual_vals! end
+function compute_reduced_costs! end
+function update_reduced_costs! end
+function update_stabilization_after_master_optim! end
+function update_stabilization_after_pricing_optim! end
+function check_misprice end
+
+
+function set_of_columns end
+function insert_columns! end
+
+
+# solution
+function is_infeasible end
+function is_unbounded end
+function get_primal_sol end
+function is_better_primal_sol end
+function check_primal_ip_feasibility! end
+function update_inc_primal_sol! end
+function get_dual_sol end
+
+function get_stab_dual_sol end
+function compute_sp_init_db end
+function compute_sp_init_pb end
+
+
+function get_pricing_strategy end
+function pricing_strategy_iterate end
+
+function get_pricing_subprob_optimizer end
+function optimize_pricing_problem! end
+
+function get_primal_sols end
+function push_in_set! end
+function get_dual_bound end
+function get_primal_bound end
+function compute_dual_bound end
+
+function update_stabilization_after_iter! end
+function get_obj_val end
+
+function new_iteration_output end
+
+function after_colgen_iteration end
+
+function is_better_dual_bound end
+
 """
     run_colgen_iteration!(context, phase, stage, ip_primal_sol, stab) -> AbstractColGenIterationOutput
 
@@ -86,11 +158,9 @@ Arguments are:
 """
 function run_colgen_iteration!(context, phase, stage, ip_primal_sol, stab)
     master = get_master(context)
-    is_min_sense = is_minimization(context)
-    O = colgen_iteration_output_type(context)
-
     mast_result = optimize_master_lp_problem!(master, context)
 
+    is_min_sense = is_minimization(context)
     # Iteration continues only if master is not infeasible nor unbounded and has dual
     # solution.
     if is_infeasible(mast_result)
@@ -99,6 +169,7 @@ function run_colgen_iteration!(context, phase, stage, ip_primal_sol, stab)
         throw(UnboundedProblemError("Unbounded master problem."))
     end
 
+    O = colgen_iteration_output_type(context)
     # Master primal solution
     mast_primal_sol = get_primal_sol(mast_result)
     if !isnothing(mast_primal_sol) && is_better_primal_sol(mast_primal_sol, ip_primal_sol)
@@ -134,9 +205,13 @@ function run_colgen_iteration!(context, phase, stage, ip_primal_sol, stab)
     # dual solution because this is the cost of the subproblem variables in the pricing problems
     # if we don't use stabilization, or because we use this cost to compute the real reduced cost
     # of the columns when using stabilization.
-    c = get_subprob_var_orig_costs(context)
-    A = get_subprob_var_coef_matrix(context)
-    red_costs = c - transpose(A) * mast_dual_sol
+
+    ## Operations moved into update_reduced_costs.
+    # c = get_subprob_var_orig_costs(context) 
+    # A = get_subprob_var_coef_matrix(context)
+    # red_costs = c - transpose(A) * mast_dual_sol
+    ## End to do.
+    red_costs = compute_reduced_costs!(context, phase, mast_dual_sol)
 
     # Buffer when using stabilization to compute the real reduced cost
     # of the column once generated.
@@ -167,15 +242,13 @@ function run_colgen_iteration!(context, phase, stage, ip_primal_sol, stab)
         # by the stabilization. We this need to recompute the reduced cost of the subproblem
         # variables if the stabilization changes the master dual solution.
         cur_red_costs = if stab_changes_mast_dual_sol
-            c - transpose(A) * sep_mast_dual_sol
+            compute_reduced_costs!(context, phase, sep_mast_dual_sol)
         else
             red_costs
         end
 
-        # Updates subproblems reduced costs.
-        for (_, sp) in get_pricing_subprobs(context)
-            update_sp_vars_red_costs!(context, sp, cur_red_costs)
-        end
+        # Updates reduced costs.
+        update_reduced_costs!(context, phase, cur_red_costs)
 
         # To compute the master dual bound, we need a dual bound to each pricing subproblems.
         # So we ask for an initial dual bound for each pricing subproblem that we update when
@@ -254,8 +327,7 @@ function run_colgen_iteration!(context, phase, stage, ip_primal_sol, stab)
 
     # Insert columns into the master.
     # The implementation is responsible for checking if the column is "valid".
-    col_ids = insert_columns!(context, phase, generated_columns)
-    nb_cols_inserted = length(col_ids)
+    nb_cols_inserted = insert_columns!(context, phase, generated_columns)
 
     update_stabilization_after_iter!(stab, mast_dual_sol)
 
