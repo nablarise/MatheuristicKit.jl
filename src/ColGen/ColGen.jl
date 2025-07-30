@@ -5,8 +5,12 @@ using MathOptInterface, ReformulationKit, JuMP
 const MOI = MathOptInterface
 const RK = ReformulationKit
 
+include("helpers.jl")
 include("coluna.jl")
 include("impl.jl")
+
+# Export helper functions
+export add_variable!, add_constraint!
 
 
 #### reformulation API
