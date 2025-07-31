@@ -13,6 +13,7 @@ const RK = ReformulationKit
 const MOI = MathOptInterface
 
 include("helpers.jl")
+include("dw_colgen.jl")
 
 dw_annotation(::Val{:assignment}, machine, job) = RK.dantzig_wolfe_subproblem(machine);
 dw_annotation(::Val{:coverage}, job) = RK.dantzig_wolfe_master();
@@ -21,6 +22,9 @@ dw_annotation(::Val{:knapsack}, machine) = RK.dantzig_wolfe_subproblem(machine);
 function run()
     # Run helper tests
     test_unit_helpers()
+    
+    # Run Dantzig-Wolfe column generation tests
+    test_dw_colgen()
     
     # Run column generation example
     machines = 1:3;
