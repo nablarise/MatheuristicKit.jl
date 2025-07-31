@@ -1,12 +1,12 @@
-struct ColGenDefaultImplementation
+struct DantzigWolfeColGenImpl
     reformulation::RK.DantzigWolfeReformulation
 end
 
 ## Reformulation API
-get_master(impl::ColGenDefaultImplementation) = RK.master(impl.reformulation)
-get_reform(impl::ColGenDefaultImplementation) = impl.reformulation
-is_minimization(impl::ColGenDefaultImplementation) = JuMP.objective_sense(get_master(impl)) != JuMP.MAX_SENSE
-get_pricing_subprobs(impl::ColGenDefaultImplementation) = RK.subproblems(impl.reformulation)
+get_master(impl::DantzigWolfeColGenImpl) = RK.master(impl.reformulation)
+get_reform(impl::DantzigWolfeColGenImpl) = impl.reformulation
+is_minimization(impl::DantzigWolfeColGenImpl) = JuMP.objective_sense(get_master(impl)) != JuMP.MAX_SENSE
+get_pricing_subprobs(impl::DantzigWolfeColGenImpl) = RK.subproblems(impl.reformulation)
 
 
 struct ColGenPhaseIterator end
@@ -23,18 +23,18 @@ struct ExactStage end
 struct NoStabilization end
 
 
-new_phase_iterator(::ColGenDefaultImplementation) = ColGenPhaseIterator()
+new_phase_iterator(::DantzigWolfeColGenImpl) = ColGenPhaseIterator()
 initial_phase(::ColGenPhaseIterator) = MixedPhase1and2()
-new_stage_iterator(::ColGenDefaultImplementation) = ColGenStageIterator()
+new_stage_iterator(::DantzigWolfeColGenImpl) = ColGenStageIterator()
 initial_stage(::ColGenStageIterator) = ExactStage()
 
 
-stop_colgen(::ColGenDefaultImplementation, ::Nothing) = false
+stop_colgen(::DantzigWolfeColGenImpl, ::Nothing) = false
 
 
 
 ## Stabilization
-setup_stabilization!(::ColGenDefaultImplementation, ::JuMP.Model) = NoStabilization()
+setup_stabilization!(::DantzigWolfeColGenImpl, ::JuMP.Model) = NoStabilization()
 
 function setup_reformulation!(reform::RK.DantzigWolfeReformulation, phase::MixedPhase1and2)
     master_jump = RK.master(reform)
@@ -93,24 +93,24 @@ function setup_reformulation!(reform::RK.DantzigWolfeReformulation, phase::Mixed
     end
 end
 
-function setup_context!(context::ColGenDefaultImplementation, ::MixedPhase1and2)
+function setup_context!(context::DantzigWolfeColGenImpl, ::MixedPhase1and2)
     # I don't know what I should do.
 end
 
 
 ##### column generation phase
 
-function stop_colgen_phase(context::ColGenDefaultImplementation, ::MixedPhase1and2, colgen_iter_output, incumbent_dual_bound, ip_primal_sol, iteration)
+function stop_colgen_phase(context::DantzigWolfeColGenImpl, ::MixedPhase1and2, colgen_iter_output, incumbent_dual_bound, ip_primal_sol, iteration)
     return iteration > 10
 end
 
-function before_colgen_iteration(::ColGenDefaultImplementation, ::MixedPhase1and2)
+function before_colgen_iteration(::DantzigWolfeColGenImpl, ::MixedPhase1and2)
     return nothing
 end
 
 struct ColGenIterationOutput end
 
-colgen_iteration_output_type(::ColGenDefaultImplementation) = ColGenIterationOutput
+colgen_iteration_output_type(::DantzigWolfeColGenImpl) = ColGenIterationOutput
 
 struct MasterSolution end
 is_infeasible(::MasterSolution) = false
@@ -121,18 +121,18 @@ get_primal_sol(::MasterSolution) = MasterPrimalSolution()
 is_better_primal_sol(::MasterPrimalSolution, ::Nothing) = true
 
 
-function optimize_master_lp_problem!(master::JuMP.Model, ::ColGenDefaultImplementation)
+function optimize_master_lp_problem!(master::JuMP.Model, ::DantzigWolfeColGenImpl)
     #JuMP.optimize!(master)
     return MasterSolution()
 end
 
 struct ProjectedIpPrimalSol end
 
-function check_primal_ip_feasibility!(::MasterPrimalSolution, ::ColGenDefaultImplementation, ::MixedPhase1and2)
+function check_primal_ip_feasibility!(::MasterPrimalSolution, ::DantzigWolfeColGenImpl, ::MixedPhase1and2)
     return ProjectedIpPrimalSol(), false
 end
 
-function update_inc_primal_sol!(::ColGenDefaultImplementation, ::Nothing, ::ProjectedIpPrimalSol)
+function update_inc_primal_sol!(::DantzigWolfeColGenImpl, ::Nothing, ::ProjectedIpPrimalSol)
 
 end
 
@@ -140,7 +140,7 @@ struct MasterDualSolution end
 
 get_dual_sol(::MasterSolution) = MasterDualSolution()
 
-function update_master_constrs_dual_vals!(::ColGenDefaultImplementation, ::MasterDualSolution)
+function update_master_constrs_dual_vals!(::DantzigWolfeColGenImpl, ::MasterDualSolution)
     # We do not support non-robust cuts.
 end
 
@@ -150,7 +150,7 @@ function update_stabilization_after_master_optim!(::NoStabilization, ::MixedPhas
 end
 
 struct SetOfColumns end
-set_of_columns(::ColGenDefaultImplementation) = SetOfColumns()
+set_of_columns(::DantzigWolfeColGenImpl) = SetOfColumns()
 
 function get_stab_dual_sol(::NoStabilization, ::MixedPhase1and2, dual_sol::MasterDualSolution)
     return dual_sol
@@ -158,28 +158,28 @@ end
 
 struct ReducedCosts end
 
-function compute_reduced_costs!(context::ColGenDefaultImplementation, phase::MixedPhase1and2, mast_dual_sol::MasterDualSolution)
+function compute_reduced_costs!(context::DantzigWolfeColGenImpl, phase::MixedPhase1and2, mast_dual_sol::MasterDualSolution)
     return ReducedCosts()
 end
 
-function update_reduced_costs!(::ColGenDefaultImplementation, ::MixedPhase1and2, ::ReducedCosts)
+function update_reduced_costs!(::DantzigWolfeColGenImpl, ::MixedPhase1and2, ::ReducedCosts)
     # compute reduced costs.
     # update reducted costs in subproblems.
 end
 
 
-function compute_sp_init_db(::ColGenDefaultImplementation, ::JuMP.Model)
+function compute_sp_init_db(::DantzigWolfeColGenImpl, ::JuMP.Model)
 
 end
 
-function compute_sp_init_pb(::ColGenDefaultImplementation, ::JuMP.Model)
+function compute_sp_init_pb(::DantzigWolfeColGenImpl, ::JuMP.Model)
 
 end
 
 struct PriceAllSubproblemsStrategy 
     collection
 end
-get_pricing_strategy(impl::ColGenDefaultImplementation, ::MixedPhase1and2) = PriceAllSubproblemsStrategy(get_pricing_subprobs(impl))
+get_pricing_strategy(impl::DantzigWolfeColGenImpl, ::MixedPhase1and2) = PriceAllSubproblemsStrategy(get_pricing_subprobs(impl))
 pricing_strategy_iterate(impl::PriceAllSubproblemsStrategy) = iterate(impl.collection)
 pricing_strategy_iterate(impl::PriceAllSubproblemsStrategy, state) = iterate(impl.collection, state)
 
@@ -191,29 +191,29 @@ struct PricingSolution end
 is_infeasible(::PricingSolution) = false
 is_unbounded(::PricingSolution) = false
 
-function optimize_pricing_problem!(::ColGenDefaultImplementation, ::JuMP.Model, ::SubproblemOptimizer, ::MasterDualSolution, stab_changes_mast_dual_sol)
+function optimize_pricing_problem!(::DantzigWolfeColGenImpl, ::JuMP.Model, ::SubproblemOptimizer, ::MasterDualSolution, stab_changes_mast_dual_sol)
     @assert !stab_changes_mast_dual_sol
     return PricingSolution()
 end
 
 struct PricingPrimalSolution end
 get_primal_sols(::PricingSolution) = [PricingPrimalSolution(), PricingPrimalSolution()]
-push_in_set!(::ColGenDefaultImplementation, ::SetOfColumns, ::PricingPrimalSolution) = true
+push_in_set!(::DantzigWolfeColGenImpl, ::SetOfColumns, ::PricingPrimalSolution) = true
 
 get_primal_bound(::PricingSolution) = nothing
 get_dual_bound(::PricingSolution) = nothing
 
-function compute_dual_bound(impl::ColGenDefaultImplementation, ::MixedPhase1and2, sps_db::Dict{Int64, Nothing}, generated_columns::SetOfColumns, sep_mast_dual_sol::MasterDualSolution)
+function compute_dual_bound(impl::DantzigWolfeColGenImpl, ::MixedPhase1and2, sps_db::Dict{Int64, Nothing}, generated_columns::SetOfColumns, sep_mast_dual_sol::MasterDualSolution)
     return 0.0
 end
 
-function update_stabilization_after_pricing_optim!(::NoStabilization, ::ColGenDefaultImplementation, ::SetOfColumns, ::JuMP.Model, ::Float64, ::MasterDualSolution)
+function update_stabilization_after_pricing_optim!(::NoStabilization, ::DantzigWolfeColGenImpl, ::SetOfColumns, ::JuMP.Model, ::Float64, ::MasterDualSolution)
     return nothing
 end
 
 check_misprice(::NoStabilization, ::SetOfColumns, ::MasterDualSolution) = false
 
-function insert_columns!(::ColGenDefaultImplementation, ::MixedPhase1and2, ::SetOfColumns)
+function insert_columns!(::DantzigWolfeColGenImpl, ::MixedPhase1and2, ::SetOfColumns)
     return 0
 end
 
@@ -243,7 +243,7 @@ end
 get_dual_bound(::ColGenIterationOutput) = 0.0
 
 function after_colgen_iteration(
-    impl::ColGenDefaultImplementation, 
+    impl::DantzigWolfeColGenImpl, 
     phase::MixedPhase1and2, 
     stage::ExactStage, 
     colgen_iterations::Int64, 
@@ -255,14 +255,14 @@ function after_colgen_iteration(
 end
 
 is_better_dual_bound(
-    ::ColGenDefaultImplementation, 
+    ::DantzigWolfeColGenImpl, 
     dual_bound::Float64,
     incumbent_dual_bound::Float64
 ) = false
 
 
 struct ColGenPhaseOutput end
-colgen_phase_output_type(::ColGenDefaultImplementation) = ColGenPhaseOutput
+colgen_phase_output_type(::DantzigWolfeColGenImpl) = ColGenPhaseOutput
 
 function new_phase_output(
     ::Type{<:ColGenPhaseOutput}, 
@@ -285,7 +285,7 @@ function next_stage(::ColGenStageIterator, ::ExactStage, ::ColGenPhaseOutput)
 end
 
 struct ColGenOutput end
-colgen_output_type(::ColGenDefaultImplementation) = ColGenOutput
+colgen_output_type(::DantzigWolfeColGenImpl) = ColGenOutput
 
 function new_output(::Type{ColGenOutput}, ::ColGenPhaseOutput)
     println("colgen end")

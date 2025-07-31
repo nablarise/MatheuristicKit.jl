@@ -7,7 +7,7 @@ const RK = ReformulationKit
 
 include("helpers.jl")
 include("coluna.jl")
-include("impl.jl")
+include("dw_colgen.jl")
 
 # Export helper functions
 export add_variable!, add_constraint!
@@ -21,7 +21,7 @@ function get_pricing_subprobs end
 
 
 function run_column_generation(reformulation)
-    context = ColGenDefaultImplementation(reformulation)
+    context = DantzigWolfeColGenImpl(reformulation)
     ip_primal_sol = nothing
     run!(context, ip_primal_sol)
 end
