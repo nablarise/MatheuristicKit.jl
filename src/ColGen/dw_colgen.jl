@@ -1,5 +1,15 @@
 struct DantzigWolfeColGenImpl
     reformulation::RK.DantzigWolfeReformulation
+    eq_art_vars::Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.EqualTo{Float64}}, Tuple{MOI.VariableIndex, MOI.VariableIndex}}
+    leq_art_vars::Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}}, MOI.VariableIndex}
+    geq_art_vars::Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.GreaterThan{Float64}}, MOI.VariableIndex}
+    
+    function DantzigWolfeColGenImpl(reformulation::RK.DantzigWolfeReformulation)
+        eq_art_vars = Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.EqualTo{Float64}}, Tuple{MOI.VariableIndex, MOI.VariableIndex}}()
+        leq_art_vars = Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}}, MOI.VariableIndex}()
+        geq_art_vars = Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.GreaterThan{Float64}}, MOI.VariableIndex}()
+        return new(reformulation, eq_art_vars, leq_art_vars, geq_art_vars)
+    end
 end
 
 ## Reformulation API
@@ -36,13 +46,22 @@ stop_colgen(::DantzigWolfeColGenImpl, ::Nothing) = false
 ## Stabilization
 setup_stabilization!(::DantzigWolfeColGenImpl, ::JuMP.Model) = NoStabilization()
 
-function setup_reformulation!(reform::RK.DantzigWolfeReformulation, phase::MixedPhase1and2)
+function setup_reformulation!(context::DantzigWolfeColGenImpl, phase::MixedPhase1and2)
+    reform = context.reformulation
     master_jump = RK.master(reform)
     master = JuMP.backend(master_jump)  # Get the MOI backend from JuMP model
     
     # Determine cost sign based on optimization sense (large positive cost penalizes artificial variables)
     sense = MOI.get(master, MOI.ObjectiveSense())
     cost = sense == MOI.MIN_SENSE ? phase.artificial_var_cost : -phase.artificial_var_cost
+    
+    # Higher cost for convexity constraints (10x the regular cost)
+    convexity_cost = 10.0 * cost
+    
+    # Get convexity constraint references from the reformulation  
+    # Convert JuMP constraint references to MOI constraint indices
+    convexity_leq_refs = Set(JuMP.index(ref) for ref in values(reform.convexity_constraints_ub))
+    convexity_geq_refs = Set(JuMP.index(ref) for ref in values(reform.convexity_constraints_lb))
     
     # Get all equality constraints in the master problem
     eq_constraints = MOI.get(master, MOI.ListOfConstraintIndices{MOI.ScalarAffineFunction{Float64}, MOI.EqualTo{Float64}}())
@@ -62,6 +81,9 @@ function setup_reformulation!(reform::RK.DantzigWolfeReformulation, phase::Mixed
             constraint_coeffs=Dict(constraint_ref => -1.0),
             objective_coeff=cost
         )
+        
+        # Store in tracking dictionary
+        context.eq_art_vars[constraint_ref] = (s_pos, s_neg)
     end
     
     # Get all less-than-or-equal constraints in the master problem
@@ -69,13 +91,20 @@ function setup_reformulation!(reform::RK.DantzigWolfeReformulation, phase::Mixed
     
     # Add artificial variables for each ≤ constraint: ax ≤ b becomes ax + s = b where s ≥ 0
     for constraint_ref in leq_constraints
+        # Determine if this is a convexity constraint
+        is_convexity = constraint_ref in convexity_leq_refs
+        constraint_cost = is_convexity ? convexity_cost : cost
+        
         # For ax ≤ b, we only need one artificial variable with positive coefficient
         # This allows the constraint to be violated upwards (ax can exceed b)
         s_pos = add_variable!(master;
             lower_bound=0.0,
             constraint_coeffs=Dict(constraint_ref => 1.0),
-            objective_coeff=cost
+            objective_coeff=constraint_cost
         )
+        
+        # Store in tracking dictionary
+        context.leq_art_vars[constraint_ref] = s_pos
     end
     
     # Get all greater-than-or-equal constraints in the master problem
@@ -83,13 +112,20 @@ function setup_reformulation!(reform::RK.DantzigWolfeReformulation, phase::Mixed
     
     # Add artificial variables for each ≥ constraint: ax ≥ b becomes ax - s = b where s ≥ 0  
     for constraint_ref in geq_constraints
+        # Determine if this is a convexity constraint
+        is_convexity = constraint_ref in convexity_geq_refs
+        constraint_cost = is_convexity ? convexity_cost : cost
+        
         # For ax ≥ b, we need one artificial variable with negative coefficient
         # This allows the constraint to be violated downwards (ax can be less than b)
         s_neg = add_variable!(master;
             lower_bound=0.0,
             constraint_coeffs=Dict(constraint_ref => -1.0),
-            objective_coeff=cost
+            objective_coeff=constraint_cost
         )
+        
+        # Store in tracking dictionary
+        context.geq_art_vars[constraint_ref] = s_neg
     end
 end
 
