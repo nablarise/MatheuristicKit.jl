@@ -11,7 +11,11 @@ get_pricing_subprobs(impl::ColGenDefaultImplementation) = RK.subproblems(impl.re
 
 struct ColGenPhaseIterator end
 
-struct MixedPhase1and2 end
+struct MixedPhase1and2 
+    artificial_var_cost::Float64
+    
+    MixedPhase1and2(artificial_var_cost::Float64 = 1e6) = new(artificial_var_cost)
+end
 
 struct ColGenStageIterator end
 struct ExactStage end
@@ -32,8 +36,61 @@ stop_colgen(::ColGenDefaultImplementation, ::Nothing) = false
 ## Stabilization
 setup_stabilization!(::ColGenDefaultImplementation, ::JuMP.Model) = NoStabilization()
 
-function setup_reformulation!(reform::RK.DantzigWolfeReformulation, ::MixedPhase1and2)
-    # Activate artificial variables.
+function setup_reformulation!(reform::RK.DantzigWolfeReformulation, phase::MixedPhase1and2)
+    master_jump = RK.master(reform)
+    master = JuMP.backend(master_jump)  # Get the MOI backend from JuMP model
+    
+    # Determine cost sign based on optimization sense (large positive cost penalizes artificial variables)
+    sense = MOI.get(master, MOI.ObjectiveSense())
+    cost = sense == MOI.MIN_SENSE ? phase.artificial_var_cost : -phase.artificial_var_cost
+    
+    # Get all equality constraints in the master problem
+    eq_constraints = MOI.get(master, MOI.ListOfConstraintIndices{MOI.ScalarAffineFunction{Float64}, MOI.EqualTo{Float64}}())
+    
+    # Add artificial variables for each equality constraint: ax = b becomes ax + s⁺ - s⁻ = b
+    for constraint_ref in eq_constraints
+        # Add positive artificial variable (s⁺)
+        s_pos = add_variable!(master; 
+            lower_bound=0.0, 
+            constraint_coeffs=Dict(constraint_ref => 1.0),
+            objective_coeff=cost
+        )
+        
+        # Add negative artificial variable (s⁻)  
+        s_neg = add_variable!(master;
+            lower_bound=0.0,
+            constraint_coeffs=Dict(constraint_ref => -1.0),
+            objective_coeff=cost
+        )
+    end
+    
+    # Get all less-than-or-equal constraints in the master problem
+    leq_constraints = MOI.get(master, MOI.ListOfConstraintIndices{MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}}())
+    
+    # Add artificial variables for each ≤ constraint: ax ≤ b becomes ax + s = b where s ≥ 0
+    for constraint_ref in leq_constraints
+        # For ax ≤ b, we only need one artificial variable with positive coefficient
+        # This allows the constraint to be violated upwards (ax can exceed b)
+        s_pos = add_variable!(master;
+            lower_bound=0.0,
+            constraint_coeffs=Dict(constraint_ref => 1.0),
+            objective_coeff=cost
+        )
+    end
+    
+    # Get all greater-than-or-equal constraints in the master problem
+    geq_constraints = MOI.get(master, MOI.ListOfConstraintIndices{MOI.ScalarAffineFunction{Float64}, MOI.GreaterThan{Float64}}())
+    
+    # Add artificial variables for each ≥ constraint: ax ≥ b becomes ax - s = b where s ≥ 0  
+    for constraint_ref in geq_constraints
+        # For ax ≥ b, we need one artificial variable with negative coefficient
+        # This allows the constraint to be violated downwards (ax can be less than b)
+        s_neg = add_variable!(master;
+            lower_bound=0.0,
+            constraint_coeffs=Dict(constraint_ref => -1.0),
+            objective_coeff=cost
+        )
+    end
 end
 
 function setup_context!(context::ColGenDefaultImplementation, ::MixedPhase1and2)
