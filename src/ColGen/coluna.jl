@@ -14,7 +14,6 @@ function setup_stabilization! end
 
 function stop_colgen end
 function setup_reformulation! end
-function setup_context! end
 
 function next_phase end
 function next_stage end
@@ -44,7 +43,6 @@ function run!(context, ip_primal_sol; iter = 1)
     phase_output = nothing
     while !isnothing(phase) && !stop_colgen(context, phase_output) && !isnothing(stage)
         setup_reformulation!(context, phase)
-        setup_context!(context, phase)
         last_iter = isnothing(phase_output) ? iter : phase_output.nb_iterations
         phase_output = run_colgen_phase!(context, phase, stage, ip_primal_sol, stab; iter = last_iter)
         phase = next_phase(phase_it, phase, phase_output)
@@ -56,7 +54,6 @@ end
 
 
 function stop_colgen_phase end
-function before_colgen_iteration end
 function is_better_dual_bound end
 function colgen_phase_output_type end
 function new_phase_output end
@@ -82,7 +79,6 @@ function run_colgen_phase!(context, phase, stage, ip_primal_sol, stab; iter = 1)
     colgen_iter_output = nothing
     incumbent_dual_bound = nothing
     while !stop_colgen_phase(context, phase, colgen_iter_output, incumbent_dual_bound, ip_primal_sol, iteration)
-        before_colgen_iteration(context, phase)
         colgen_iter_output = run_colgen_iteration!(context, phase, stage, ip_primal_sol, stab)
         dual_bound = ColGen.get_dual_bound(colgen_iter_output)
         if !isnothing(dual_bound) && (isnothing(incumbent_dual_bound) || is_better_dual_bound(context, dual_bound, incumbent_dual_bound))

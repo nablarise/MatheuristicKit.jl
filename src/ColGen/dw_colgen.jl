@@ -12,8 +12,23 @@ struct DantzigWolfeColGenImpl
     end
 end
 
+struct Master{MoiModel}
+    moi_master::MoiModel
+    eq_art_vars::Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.EqualTo{Float64}}, Tuple{MOI.VariableIndex, MOI.VariableIndex}}
+    leq_art_vars::Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}}, MOI.VariableIndex}
+    geq_art_vars::Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.GreaterThan{Float64}}, MOI.VariableIndex}
+end
+
+moi_master(master::Master) = master.moi_master
+
 ## Reformulation API
-get_master(impl::DantzigWolfeColGenImpl) = RK.master(impl.reformulation)
+get_master(impl::DantzigWolfeColGenImpl) = Master(
+    JuMP.backend(RK.master(impl.reformulation)),
+    impl.eq_art_vars,
+    impl.leq_art_vars,
+    impl.geq_art_vars
+)
+
 get_reform(impl::DantzigWolfeColGenImpl) = impl.reformulation
 is_minimization(impl::DantzigWolfeColGenImpl) = JuMP.objective_sense(get_master(impl)) != JuMP.MAX_SENSE
 get_pricing_subprobs(impl::DantzigWolfeColGenImpl) = RK.subproblems(impl.reformulation)
@@ -45,9 +60,6 @@ initial_stage(::ColGenStageIterator) = ExactStage()
 stop_colgen(::DantzigWolfeColGenImpl, ::Nothing) = false
 
 
-
-## Stabilization
-setup_stabilization!(::DantzigWolfeColGenImpl, ::JuMP.Model) = NoStabilization()
 
 function setup_reformulation!(context::DantzigWolfeColGenImpl, phase::MixedPhase1and2)
     reform = context.reformulation
@@ -132,10 +144,6 @@ function setup_reformulation!(context::DantzigWolfeColGenImpl, phase::MixedPhase
     end
 end
 
-function setup_context!(context::DantzigWolfeColGenImpl, ::MixedPhase1and2)
-    # I don't know what I should do.
-end
-
 
 ##### column generation phase
 
@@ -143,68 +151,18 @@ function stop_colgen_phase(context::DantzigWolfeColGenImpl, ::MixedPhase1and2, c
     return iteration > 10
 end
 
-function before_colgen_iteration(::DantzigWolfeColGenImpl, ::MixedPhase1and2)
-    return nothing
-end
-
 struct ColGenIterationOutput end
 
 colgen_iteration_output_type(::DantzigWolfeColGenImpl) = ColGenIterationOutput
 
-struct MasterSolution end
-is_infeasible(::MasterSolution) = false
-is_unbounded(::MasterSolution) = false
-
-struct MasterPrimalSolution end
-get_primal_sol(::MasterSolution) = MasterPrimalSolution()
-is_better_primal_sol(::MasterPrimalSolution, ::Nothing) = true
 
 
-function optimize_master_lp_problem!(master::JuMP.Model, ::DantzigWolfeColGenImpl)
-    #JuMP.optimize!(master)
-    return MasterSolution()
-end
-
-struct ProjectedIpPrimalSol end
-
-function check_primal_ip_feasibility!(::MasterPrimalSolution, ::DantzigWolfeColGenImpl, ::MixedPhase1and2)
-    return ProjectedIpPrimalSol(), false
-end
-
-function update_inc_primal_sol!(::DantzigWolfeColGenImpl, ::Nothing, ::ProjectedIpPrimalSol)
-
-end
-
-struct MasterDualSolution end
-
-get_dual_sol(::MasterSolution) = MasterDualSolution()
-
-function update_master_constrs_dual_vals!(::DantzigWolfeColGenImpl, ::MasterDualSolution)
-    # We do not support non-robust cuts.
-end
-
-function update_stabilization_after_master_optim!(::NoStabilization, ::MixedPhase1and2, ::MasterDualSolution)
-    # nothing to do.
-    return false
-end
 
 struct SetOfColumns end
 set_of_columns(::DantzigWolfeColGenImpl) = SetOfColumns()
 
-function get_stab_dual_sol(::NoStabilization, ::MixedPhase1and2, dual_sol::MasterDualSolution)
-    return dual_sol
-end
 
-struct ReducedCosts end
 
-function compute_reduced_costs!(context::DantzigWolfeColGenImpl, phase::MixedPhase1and2, mast_dual_sol::MasterDualSolution)
-    return ReducedCosts()
-end
-
-function update_reduced_costs!(::DantzigWolfeColGenImpl, ::MixedPhase1and2, ::ReducedCosts)
-    # compute reduced costs.
-    # update reducted costs in subproblems.
-end
 
 
 function compute_sp_init_db(::DantzigWolfeColGenImpl, ::JuMP.Model)
@@ -225,40 +183,10 @@ pricing_strategy_iterate(impl::PriceAllSubproblemsStrategy, state) = iterate(imp
 struct SubproblemOptimizer end
 get_pricing_subprob_optimizer(stage::ExactStage, sp_to_solve::JuMP.Model) = SubproblemOptimizer()
 
-struct PricingSolution end
 
-is_infeasible(::PricingSolution) = false
-is_unbounded(::PricingSolution) = false
 
-function optimize_pricing_problem!(::DantzigWolfeColGenImpl, ::JuMP.Model, ::SubproblemOptimizer, ::MasterDualSolution, stab_changes_mast_dual_sol)
-    @assert !stab_changes_mast_dual_sol
-    return PricingSolution()
-end
 
-struct PricingPrimalSolution end
-get_primal_sols(::PricingSolution) = [PricingPrimalSolution(), PricingPrimalSolution()]
-push_in_set!(::DantzigWolfeColGenImpl, ::SetOfColumns, ::PricingPrimalSolution) = true
 
-get_primal_bound(::PricingSolution) = nothing
-get_dual_bound(::PricingSolution) = nothing
-
-function compute_dual_bound(impl::DantzigWolfeColGenImpl, ::MixedPhase1and2, sps_db::Dict{Int64, Nothing}, generated_columns::SetOfColumns, sep_mast_dual_sol::MasterDualSolution)
-    return 0.0
-end
-
-function update_stabilization_after_pricing_optim!(::NoStabilization, ::DantzigWolfeColGenImpl, ::SetOfColumns, ::JuMP.Model, ::Float64, ::MasterDualSolution)
-    return nothing
-end
-
-check_misprice(::NoStabilization, ::SetOfColumns, ::MasterDualSolution) = false
-
-function insert_columns!(::DantzigWolfeColGenImpl, ::MixedPhase1and2, ::SetOfColumns)
-    return 0
-end
-
-update_stabilization_after_iter!(::NoStabilization, ::MasterDualSolution) = nothing
-
-get_obj_val(::MasterSolution) = 0.0
 
 
 function new_iteration_output(::Type{<:ColGenIterationOutput}, 
