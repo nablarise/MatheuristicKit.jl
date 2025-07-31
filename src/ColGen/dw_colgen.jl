@@ -23,8 +23,11 @@ struct ColGenPhaseIterator end
 
 struct MixedPhase1and2 
     artificial_var_cost::Float64
+    convexity_artificial_var_cost::Float64
     
-    MixedPhase1and2(artificial_var_cost::Float64 = 1e6) = new(artificial_var_cost)
+    function MixedPhase1and2(artificial_var_cost::Float64 = 1e6, convexity_artificial_var_cost::Float64 = 10.0 * artificial_var_cost)
+        return new(artificial_var_cost, convexity_artificial_var_cost)
+    end
 end
 
 struct ColGenStageIterator end
@@ -55,8 +58,8 @@ function setup_reformulation!(context::DantzigWolfeColGenImpl, phase::MixedPhase
     sense = MOI.get(master, MOI.ObjectiveSense())
     cost = sense == MOI.MIN_SENSE ? phase.artificial_var_cost : -phase.artificial_var_cost
     
-    # Higher cost for convexity constraints (10x the regular cost)
-    convexity_cost = 10.0 * cost
+    # Cost for convexity constraints (configurable)
+    convexity_cost = sense == MOI.MIN_SENSE ? phase.convexity_artificial_var_cost : -phase.convexity_artificial_var_cost
     
     # Get convexity constraint references from the reformulation  
     # Convert JuMP constraint references to MOI constraint indices

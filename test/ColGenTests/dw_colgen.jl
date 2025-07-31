@@ -38,7 +38,7 @@ function test_setup_reformulation_with_artificial_variables()
     
     # Create context and phase
     context = MK.ColGen.DantzigWolfeColGenImpl(reformulation)
-    phase = MK.ColGen.MixedPhase1and2(1000.0)  # Artificial variable cost = 1000.0
+    phase = MK.ColGen.MixedPhase1and2(1000.0, 10000.0)  # Regular cost = 1000.0, Convexity cost = 10000.0
     
     # Get master MOI backend for verification
     master_moi = JuMP.backend(master)
