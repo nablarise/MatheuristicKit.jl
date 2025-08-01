@@ -188,6 +188,7 @@ function run_colgen_iteration!(context, phase, stage, ip_primal_sol, stab)
     end
 
     mast_dual_sol = get_dual_sol(mast_result)
+    @show mast_dual_sol
     if isnothing(mast_dual_sol)
         error("Column generation interrupted: LP solver did not return an optimal dual solution")
     end

@@ -14,6 +14,7 @@ const MOI = MathOptInterface
 
 include("helpers.jl")
 include("dw_colgen.jl")
+include("dw_colgen_iteration.jl")
 include("optimizer_validation.jl")
 
 dw_annotation(::Val{:assignment}, machine, job) = RK.dantzig_wolfe_subproblem(machine);
@@ -26,6 +27,8 @@ function run()
     
     # Run Dantzig-Wolfe column generation tests
     test_dw_colgen()
+    
+    test_unit_solution()
     
     # Run optimizer validation tests
     test_unit_optimizer_validation()

@@ -5,6 +5,7 @@ end
 
 struct MasterDualSolution 
     obj_value::Float64
+    constraint_duals::Dict{Type{<:MOI.ConstraintIndex}, Dict{Int64, Float64}}
 end
 
 struct MasterSolution
@@ -23,30 +24,64 @@ get_dual_sol(sol::MasterSolution) = sol.dual_sol
 
 is_better_primal_sol(::MasterPrimalSolution, ::Nothing) = true
 
+function _populate_variable_values(model)
+    variable_values = Dict{MOI.VariableIndex, Float64}()
+    primal_status = MOI.get(model, MOI.PrimalStatus())
+    
+    if primal_status == MOI.FEASIBLE_POINT
+        # Get all variables in the model
+        variables = MOI.get(model, MOI.ListOfVariableIndices())
+        
+        # Retrieve primal value for each variable
+        for var in variables
+            variable_values[var] = MOI.get(model, MOI.VariablePrimal(), var)
+        end
+    end
+    return variable_values
+end
+
+function _populate_constraint_duals(model)
+    constraint_duals = Dict{Type{<:MOI.ConstraintIndex}, Dict{Int64, Float64}}()
+    dual_status = MOI.get(model, MOI.DualStatus())
+    
+    if dual_status == MOI.FEASIBLE_POINT
+        # Get all constraint types present in the model
+        constraint_types = MOI.get(model, MOI.ListOfConstraintTypesPresent())
+        
+        # For each constraint type, get the constraint indices and their dual values
+        for (F, S) in constraint_types
+            constraint_indices = MOI.get(model, MOI.ListOfConstraintIndices{F, S}())
+            
+            if !isempty(constraint_indices)
+                # Initialize inner dictionary for this constraint type
+                constraint_type = typeof(first(constraint_indices))
+                constraint_duals[constraint_type] = Dict{Int64, Float64}()
+                
+                # Get dual value for each constraint of this type
+                for constraint_index in constraint_indices
+                    dual_value = MOI.get(model, MOI.ConstraintDual(), constraint_index)
+                    constraint_duals[constraint_type][constraint_index.value] = dual_value
+                end
+            end
+        end
+    end
+    return constraint_duals
+end
+
 function optimize_master_lp_problem!(master, ::DantzigWolfeColGenImpl)
     MOI.optimize!(moi_master(master))
     
     # Get objective value
     obj_value = MOI.get(moi_master(master), MOI.ObjectiveValue())
-    
     # Get variable primal values
-    variable_values = Dict{MOI.VariableIndex, Float64}()
-    primal_status = MOI.get(moi_master(master), MOI.PrimalStatus())
-    
-    if primal_status == MOI.FEASIBLE_POINT
-        # Get all variables in the model
-        variables = MOI.get(moi_master(master), MOI.ListOfVariableIndices())
-        
-        # Retrieve primal value for each variable
-        for var in variables
-            variable_values[var] = MOI.get(moi_master(master), MOI.VariablePrimal(), var)
-        end
-    end
-    
+    variable_values = _populate_variable_values(moi_master(master))
     primal_sol = MasterPrimalSolution(obj_value, variable_values)
-    dual_sol = MasterDualSolution(
-        MOI.get(moi_master(master), MOI.DualObjectiveValue())
-    )
+
+    # Get dual objective value
+    dual_obj_value = MOI.get(moi_master(master), MOI.DualObjectiveValue())
+    # Get constraint dual values
+    constraint_duals = _populate_constraint_duals(moi_master(master))
+    dual_sol = MasterDualSolution(dual_obj_value, constraint_duals)
     return MasterSolution(
         MOI.get(moi_master(master), MOI.TerminationStatus()),
         MOI.get(moi_master(master), MOI.PrimalStatus()),
