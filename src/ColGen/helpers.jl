@@ -2,6 +2,8 @@
 # Author: Guillaume Marques <guillaume@nablarise.com>
 # SPDX-License-Identifier: Proprietary
 
+_inf(is_min) = is_min ? -Inf : Inf
+
 """
 add_variable!(model; lower_bound, upper_bound, variable_type, constraint_coeffs, objective_coeff)
 
@@ -29,15 +31,15 @@ function add_variable!(
     var = MOI.add_variable(model)
     
     # Set variable bounds if specified
-    if lower_bound !== nothing
+    if !isnothing(lower_bound)
         MOI.add_constraint(model, var, MOI.GreaterThan(lower_bound))
     end
-    if upper_bound !== nothing
+    if !isnothing(upper_bound)
         MOI.add_constraint(model, var, MOI.LessThan(upper_bound))
     end
     
     # Apply variable type constraint if specified
-    if variable_type !== nothing
+    if !isnothing(variable_type)
         MOI.add_constraint(model, var, variable_type)
     end
     # Continuous variables don't need additional constraints

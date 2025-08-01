@@ -1,22 +1,58 @@
-struct MasterSolution 
+struct MasterPrimalSolution 
+    obj_value::Float64
+    variable_values::Dict{MOI.VariableIndex, Float64}
+end
+
+struct MasterDualSolution 
+    obj_value::Float64
+end
+
+struct MasterSolution
     moi_termination_status::MOI.TerminationStatusCode
     moi_primal_status::MOI.ResultStatusCode
     moi_dual_status::MOI.ResultStatusCode
+    primal_sol::MasterPrimalSolution
+    dual_sol::MasterDualSolution
 end
-is_infeasible(::MasterSolution) = false
-is_unbounded(::MasterSolution) = false
-get_obj_val(::MasterSolution) = 0.0
+is_infeasible(sol::MasterSolution) = sol.moi_termination_status == MOI.INFEASIBLE
+is_unbounded(sol::MasterSolution) = sol.moi_termination_status == MOI.DUAL_INFEASIBLE || sol.moi_termination_status == MOI.INFEASIBLE_OR_UNBOUNDED
+get_obj_val(sol::MasterSolution) = sol.primal_obj_value
 
-struct MasterPrimalSolution end
-get_primal_sol(::MasterSolution) = MasterPrimalSolution()
+get_primal_sol(sol::MasterSolution) = sol.primal_sol
+get_dual_sol(sol::MasterSolution) = sol.dual_sol
+
 is_better_primal_sol(::MasterPrimalSolution, ::Nothing) = true
 
 function optimize_master_lp_problem!(master, ::DantzigWolfeColGenImpl)
     MOI.optimize!(moi_master(master))
+    
+    # Get objective value
+    obj_value = MOI.get(moi_master(master), MOI.ObjectiveValue())
+    
+    # Get variable primal values
+    variable_values = Dict{MOI.VariableIndex, Float64}()
+    primal_status = MOI.get(moi_master(master), MOI.PrimalStatus())
+    
+    if primal_status == MOI.FEASIBLE_POINT
+        # Get all variables in the model
+        variables = MOI.get(moi_master(master), MOI.ListOfVariableIndices())
+        
+        # Retrieve primal value for each variable
+        for var in variables
+            variable_values[var] = MOI.get(moi_master(master), MOI.VariablePrimal(), var)
+        end
+    end
+    
+    primal_sol = MasterPrimalSolution(obj_value, variable_values)
+    dual_sol = MasterDualSolution(
+        MOI.get(moi_master(master), MOI.DualObjectiveValue())
+    )
     return MasterSolution(
         MOI.get(moi_master(master), MOI.TerminationStatus()),
         MOI.get(moi_master(master), MOI.PrimalStatus()),
-        MOI.get(moi_master(master), MOI.DualStatus())
+        MOI.get(moi_master(master), MOI.DualStatus()),
+        primal_sol,
+        dual_sol
     )
 end
 
@@ -30,9 +66,6 @@ function update_inc_primal_sol!(::DantzigWolfeColGenImpl, ::Nothing, ::Projected
     
 end
 
-struct MasterDualSolution end
-
-get_dual_sol(::MasterSolution) = MasterDualSolution()
 
 
 

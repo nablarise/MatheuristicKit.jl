@@ -156,6 +156,7 @@ function run_colgen_iteration!(context, phase, stage, ip_primal_sol, stab)
     master = get_master(context)
     mast_result = optimize_master_lp_problem!(master, context)
 
+    O = colgen_iteration_output_type(context)
     is_min_sense = is_minimization(context)
     # Iteration continues only if master is not infeasible nor unbounded and has dual
     # solution.
@@ -165,7 +166,6 @@ function run_colgen_iteration!(context, phase, stage, ip_primal_sol, stab)
         throw(UnboundedProblemError("Unbounded master problem."))
     end
 
-    O = colgen_iteration_output_type(context)
     # Master primal solution
     mast_primal_sol = get_primal_sol(mast_result)
     if !isnothing(mast_primal_sol) && is_better_primal_sol(mast_primal_sol, ip_primal_sol)
