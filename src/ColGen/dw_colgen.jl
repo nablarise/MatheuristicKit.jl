@@ -8,6 +8,11 @@ struct DantzigWolfeColGenImpl
         eq_art_vars = Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.EqualTo{Float64}}, Tuple{MOI.VariableIndex, MOI.VariableIndex}}()
         leq_art_vars = Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}}, MOI.VariableIndex}()
         geq_art_vars = Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.GreaterThan{Float64}}, MOI.VariableIndex}()
+        
+        # Assert optimizer is attached (should be validated upstream)
+        master_backend = JuMP.backend(RK.master(reformulation))
+        @assert master_backend.optimizer !== nothing "Master must have optimizer attached"
+        
         return new(reformulation, eq_art_vars, leq_art_vars, geq_art_vars)
     end
 end
@@ -30,7 +35,7 @@ get_master(impl::DantzigWolfeColGenImpl) = Master(
 )
 
 get_reform(impl::DantzigWolfeColGenImpl) = impl.reformulation
-is_minimization(impl::DantzigWolfeColGenImpl) = JuMP.objective_sense(get_master(impl)) != JuMP.MAX_SENSE
+is_minimization(impl::DantzigWolfeColGenImpl) = MOI.get(get_master(impl).moi_master, MOI.ObjectiveSense()) != MOI.MAX_SENSE
 get_pricing_subprobs(impl::DantzigWolfeColGenImpl) = RK.subproblems(impl.reformulation)
 
 

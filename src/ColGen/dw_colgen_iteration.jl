@@ -1,7 +1,7 @@
 struct MasterSolution 
-    moi_termination_status::MOI.TerminationStatus
-    moi_primal_status::MOI.PrimalStatus
-    moi_dual_status::MOI.DualStatus
+    moi_termination_status::MOI.TerminationStatusCode
+    moi_primal_status::MOI.ResultStatusCode
+    moi_dual_status::MOI.ResultStatusCode
 end
 is_infeasible(::MasterSolution) = false
 is_unbounded(::MasterSolution) = false

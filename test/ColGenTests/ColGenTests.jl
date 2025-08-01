@@ -14,6 +14,7 @@ const MOI = MathOptInterface
 
 include("helpers.jl")
 include("dw_colgen.jl")
+include("optimizer_validation.jl")
 
 dw_annotation(::Val{:assignment}, machine, job) = RK.dantzig_wolfe_subproblem(machine);
 dw_annotation(::Val{:coverage}, job) = RK.dantzig_wolfe_master();
@@ -25,6 +26,9 @@ function run()
     
     # Run Dantzig-Wolfe column generation tests
     test_dw_colgen()
+    
+    # Run optimizer validation tests
+    test_unit_optimizer_validation()
     
     # Run column generation example
     machines = 1:3;
@@ -40,6 +44,7 @@ function run()
     @objective(model, Min, sum(costs[machine, job] * assignment[machine, job] for machine in machines, job in jobs));
 
     reformulation = RK.dantzig_wolfe_decomposition(model, dw_annotation)
+    JuMP.set_optimizer(RK.master(reformulation), GLPK.Optimizer)
 
     MK.ColGen.run_column_generation(reformulation)
 end
