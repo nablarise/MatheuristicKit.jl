@@ -68,6 +68,7 @@ function _populate_constraint_duals(model)
     return constraint_duals
 end
 
+# Implementation is OK
 function optimize_master_lp_problem!(master, ::DantzigWolfeColGenImpl)
     MOI.optimize!(moi_master(master))
     
@@ -102,24 +103,56 @@ function update_inc_primal_sol!(::DantzigWolfeColGenImpl, ::Nothing, ::Projected
 end
 
 
-
-
-
+# Implementation is OK
 function update_master_constrs_dual_vals!(::DantzigWolfeColGenImpl, ::MasterDualSolution)
     # We do not support non-robust cuts.
+    return nothing
 end
 
 
+struct ReducedCosts
+    values::Dict{Any, Dict{MOI.VariableIndex, Float64}}
+end
 
 
-
-struct ReducedCosts end
 
 function compute_reduced_costs!(context::DantzigWolfeColGenImpl, phase::MixedPhase1and2, mast_dual_sol::MasterDualSolution)
-    return ReducedCosts()
+    reduced_costs_dict = Dict{Any, Dict{MOI.VariableIndex, Float64}}()
+    
+    for (sp_id, pricing_sp) in get_pricing_subprobs(context)
+        sp_reduced_costs = Dict{MOI.VariableIndex, Float64}()
+        
+        # Direct access to mappings from PricingSubproblem
+        coupling_mapping = pricing_sp.coupling_constr_mapping
+        
+        # Compute reduced costs: original_cost - dual_contribution
+        for (var_index, original_cost) in pricing_sp.original_cost_mapping
+            dual_contribution = 0.0
+            
+            # Get constraint coefficients for this variable using new RK structure
+            coefficients = RK.get_variable_coefficients(coupling_mapping, var_index)
+            
+            for (constraint_type, constraint_value, coeff) in coefficients
+                # Direct lookup in type-stable dual solution structure
+                if haskey(mast_dual_sol.constraint_duals, constraint_type)
+                    constraint_dict = mast_dual_sol.constraint_duals[constraint_type]
+                    if haskey(constraint_dict, constraint_value)
+                        dual_value = constraint_dict[constraint_value]
+                        dual_contribution += coeff * dual_value
+                    end
+                end
+            end
+            
+            sp_reduced_costs[var_index] = original_cost - dual_contribution
+        end
+        
+        reduced_costs_dict[sp_id] = sp_reduced_costs
+    end
+    
+    return ReducedCosts(reduced_costs_dict)
 end
 
-function optimize_pricing_problem!(::DantzigWolfeColGenImpl, ::JuMP.Model, ::SubproblemOptimizer, ::MasterDualSolution, stab_changes_mast_dual_sol)
+function optimize_pricing_problem!(::DantzigWolfeColGenImpl, ::PricingSubproblem, ::SubproblemOptimizer, ::MasterDualSolution, stab_changes_mast_dual_sol)
     @assert !stab_changes_mast_dual_sol
     return PricingSolution()
 end
@@ -152,7 +185,18 @@ function insert_columns!(::DantzigWolfeColGenImpl, ::MixedPhase1and2, ::SetOfCol
 end
 
 
-function update_reduced_costs!(::DantzigWolfeColGenImpl, ::MixedPhase1and2, ::ReducedCosts)
-    # compute reduced costs.
-    # update reducted costs in subproblems.
+function update_reduced_costs!(context::DantzigWolfeColGenImpl, ::MixedPhase1and2, red_costs::ReducedCosts)
+    # Update objective coefficients in each subproblem with reduced costs
+    for (sp_id, pricing_sp) in get_pricing_subprobs(context)
+        if haskey(red_costs.values, sp_id)
+            sp_reduced_costs = red_costs.values[sp_id]
+            
+            # Update objective coefficients directly in the MOI model
+            for (var_index, reduced_cost) in sp_reduced_costs
+                # Use MOI to modify the objective coefficient
+                MOI.modify(pricing_sp.moi_model, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}(), 
+                          MOI.ScalarCoefficientChange(var_index, reduced_cost))
+            end
+        end
+    end
 end

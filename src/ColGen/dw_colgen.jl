@@ -1,3 +1,9 @@
+struct PricingSubproblem{MoiModel}
+    moi_model::MoiModel
+    coupling_constr_mapping::RK.CouplingConstraintMapping
+    original_cost_mapping::RK.OriginalCostMapping
+end
+
 struct DantzigWolfeColGenImpl
     reformulation::RK.DantzigWolfeReformulation
     eq_art_vars::Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.EqualTo{Float64}}, Tuple{MOI.VariableIndex, MOI.VariableIndex}}
@@ -36,7 +42,29 @@ get_master(impl::DantzigWolfeColGenImpl) = Master(
 
 get_reform(impl::DantzigWolfeColGenImpl) = impl.reformulation
 is_minimization(impl::DantzigWolfeColGenImpl) = MOI.get(get_master(impl).moi_master, MOI.ObjectiveSense()) != MOI.MAX_SENSE
-get_pricing_subprobs(impl::DantzigWolfeColGenImpl) = RK.subproblems(impl.reformulation)
+function get_pricing_subprobs(impl::DantzigWolfeColGenImpl)
+    subproblems_dict = Dict{Any, PricingSubproblem}()
+    
+    for (sp_id, jump_subproblem) in RK.subproblems(impl.reformulation)
+        # Extract MOI backend (preserving its concrete type)
+        moi_model = JuMP.backend(jump_subproblem)
+        
+        # Extract RK mappings from JuMP model extensions
+        coupling_constr_mapping = jump_subproblem.ext[:dw_coupling_constr_mapping]
+        original_cost_mapping = jump_subproblem.ext[:dw_sp_var_original_cost]
+        
+        # Create PricingSubproblem with type-stable MOI model template
+        pricing_subproblem = PricingSubproblem(
+            moi_model,
+            coupling_constr_mapping,
+            original_cost_mapping
+        )
+        
+        subproblems_dict[sp_id] = pricing_subproblem
+    end
+    
+    return subproblems_dict
+end
 
 
 struct ColGenPhaseIterator end
@@ -170,11 +198,11 @@ set_of_columns(::DantzigWolfeColGenImpl) = SetOfColumns()
 
 
 
-function compute_sp_init_db(::DantzigWolfeColGenImpl, ::JuMP.Model)
+function compute_sp_init_db(::DantzigWolfeColGenImpl, ::PricingSubproblem)
 
 end
 
-function compute_sp_init_pb(::DantzigWolfeColGenImpl, ::JuMP.Model)
+function compute_sp_init_pb(::DantzigWolfeColGenImpl, ::PricingSubproblem)
 
 end
 
@@ -186,7 +214,7 @@ pricing_strategy_iterate(impl::PriceAllSubproblemsStrategy) = iterate(impl.colle
 pricing_strategy_iterate(impl::PriceAllSubproblemsStrategy, state) = iterate(impl.collection, state)
 
 struct SubproblemOptimizer end
-get_pricing_subprob_optimizer(stage::ExactStage, sp_to_solve::JuMP.Model) = SubproblemOptimizer()
+get_pricing_subprob_optimizer(stage::ExactStage, sp_to_solve::PricingSubproblem) = SubproblemOptimizer()
 
 
 
