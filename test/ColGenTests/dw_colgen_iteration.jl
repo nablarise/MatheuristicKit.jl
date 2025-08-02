@@ -166,10 +166,86 @@ function test_reduced_costs_computation_basic()
     end
 end
 
+function test_update_reduced_costs_basic()
+    # Test that update_reduced_costs! properly sets objective coefficients in subproblem
+    # Test scenario:
+    # - 1 subproblem with 3 variables in JuMP model
+    # - Known reduced costs values
+    # - Verify objective coefficients are updated correctly in the subproblem's MOI backend
+    
+    # Test data
+    reduced_costs_values = [5.5, -2.3, 8.7]
+    
+    # Create minimal mappings (required for PricingSubproblem)
+    coupling_mapping = RK.CouplingConstraintMapping()
+    cost_mapping = RK.OriginalCostMapping()
+    
+    # Create minimal reformulation with JuMP subproblem
+    master_model = Model(GLPK.Optimizer)
+    subproblem_model = Model(GLPK.Optimizer)
+    
+    # Add variables to the JuMP subproblem
+    @variable(subproblem_model, x[1:3])
+    
+    # Set initial objective with zero coefficients
+    @objective(subproblem_model, Min, 0*x[1] + 0*x[2] + 0*x[3])
+    
+    # Get the actual MOI variable indices from JuMP
+    var_indices = [JuMP.index(x[i]) for i in 1:3]
+    
+    # Add the required extensions to the subproblem model
+    subproblem_model.ext[:dw_coupling_constr_mapping] = coupling_mapping
+    subproblem_model.ext[:dw_sp_var_original_cost] = cost_mapping
+    
+    reformulation = RK.DantzigWolfeReformulation(
+        master_model,
+        Dict(1 => subproblem_model),
+        Dict{Any,Any}(),
+        Dict{Any,Any}()
+    )
+    context = MK.ColGen.DantzigWolfeColGenImpl(reformulation)
+    
+    # Create ReducedCosts with known values using the actual MOI variable indices
+    sp_reduced_costs = Dict{MOI.VariableIndex, Float64}()
+    for (i, var_index) in enumerate(var_indices)
+        sp_reduced_costs[var_index] = reduced_costs_values[i]
+    end
+    reduced_costs = MK.ColGen.ReducedCosts(Dict(1 => sp_reduced_costs))
+    
+    # Call update_reduced_costs!
+    MK.ColGen.update_reduced_costs!(context, MK.ColGen.MixedPhase1and2(), reduced_costs)
+    
+    # Verify that objective coefficients were updated correctly
+    # Get the MOI backend of the subproblem
+    moi_backend = JuMP.backend(subproblem_model)
+    updated_obj_func = MOI.get(moi_backend, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}())
+    
+    # Check that each variable has the correct coefficient in the objective
+    var1_ok = false
+    var2_ok = false
+    var3_ok = false
+
+    for term in updated_obj_func.terms
+        if term.variable == MOI.VariableIndex(1)
+            var1_ok = term.coefficient == 5.5
+        end
+        if term.variable == MOI.VariableIndex(2)
+            var2_ok = term.coefficient == -2.3
+        end
+        if term.variable == MOI.VariableIndex(3)
+            var3_ok = term.coefficient == 8.7
+        end
+    end
+    @test var1_ok
+    @test var2_ok
+    @test var3_ok
+end
+
 function test_unit_solution()
     @testset "[solution] integration test" begin
         test_optimize_master_lp_primal_integration()
         test_optimize_master_lp_dual_integration()
         test_reduced_costs_computation_basic()
+        test_update_reduced_costs_basic()
     end
 end
