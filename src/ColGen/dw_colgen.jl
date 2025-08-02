@@ -184,12 +184,6 @@ colgen_iteration_output_type(::DantzigWolfeColGenImpl) = ColGenIterationOutput
 
 
 
-
-struct SetOfColumns end
-set_of_columns(::DantzigWolfeColGenImpl) = SetOfColumns()
-
-
-
 function new_iteration_output(::Type{<:ColGenIterationOutput}, 
     min_sense,
     mlp,

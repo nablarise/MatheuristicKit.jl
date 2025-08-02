@@ -1,13 +1,13 @@
 # Master
 
-struct MasterPrimalSolution 
+struct MasterPrimalSolution
     obj_value::Float64
-    variable_values::Dict{MOI.VariableIndex, Float64}
+    variable_values::Dict{MOI.VariableIndex,Float64}
 end
 
-struct MasterDualSolution 
+struct MasterDualSolution
     obj_value::Float64
-    constraint_duals::Dict{Type{<:MOI.ConstraintIndex}, Dict{Int64, Float64}}
+    constraint_duals::Dict{Type{<:MOI.ConstraintIndex},Dict{Int64,Float64}}
 end
 
 struct MasterSolution
@@ -19,7 +19,7 @@ struct MasterSolution
 end
 is_infeasible(sol::MasterSolution) = sol.moi_termination_status == MOI.INFEASIBLE
 is_unbounded(sol::MasterSolution) = sol.moi_termination_status == MOI.DUAL_INFEASIBLE || sol.moi_termination_status == MOI.INFEASIBLE_OR_UNBOUNDED
-get_obj_val(sol::MasterSolution) = sol.primal_obj_value
+get_obj_val(sol::MasterSolution) = sol.primal_sol.obj_value
 
 get_primal_sol(sol::MasterSolution) = sol.primal_sol
 get_dual_sol(sol::MasterSolution) = sol.dual_sol
@@ -27,13 +27,13 @@ get_dual_sol(sol::MasterSolution) = sol.dual_sol
 is_better_primal_sol(::MasterPrimalSolution, ::Nothing) = true
 
 function _populate_variable_values(model)
-    variable_values = Dict{MOI.VariableIndex, Float64}()
+    variable_values = Dict{MOI.VariableIndex,Float64}()
     primal_status = MOI.get(model, MOI.PrimalStatus())
-    
+
     if primal_status == MOI.FEASIBLE_POINT
         # Get all variables in the model
         variables = MOI.get(model, MOI.ListOfVariableIndices())
-        
+
         # Retrieve primal value for each variable
         for var in variables
             variable_values[var] = MOI.get(model, MOI.VariablePrimal(), var)
@@ -43,22 +43,22 @@ function _populate_variable_values(model)
 end
 
 function _populate_constraint_duals(model)
-    constraint_duals = Dict{Type{<:MOI.ConstraintIndex}, Dict{Int64, Float64}}()
+    constraint_duals = Dict{Type{<:MOI.ConstraintIndex},Dict{Int64,Float64}}()
     dual_status = MOI.get(model, MOI.DualStatus())
-    
+
     if dual_status == MOI.FEASIBLE_POINT
         # Get all constraint types present in the model
         constraint_types = MOI.get(model, MOI.ListOfConstraintTypesPresent())
-        
+
         # For each constraint type, get the constraint indices and their dual values
         for (F, S) in constraint_types
-            constraint_indices = MOI.get(model, MOI.ListOfConstraintIndices{F, S}())
-            
+            constraint_indices = MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
+
             if !isempty(constraint_indices)
                 # Initialize inner dictionary for this constraint type
                 constraint_type = typeof(first(constraint_indices))
-                constraint_duals[constraint_type] = Dict{Int64, Float64}()
-                
+                constraint_duals[constraint_type] = Dict{Int64,Float64}()
+
                 # Get dual value for each constraint of this type
                 for constraint_index in constraint_indices
                     dual_value = MOI.get(model, MOI.ConstraintDual(), constraint_index)
@@ -73,7 +73,7 @@ end
 # Implementation is OK
 function optimize_master_lp_problem!(master, ::DantzigWolfeColGenImpl)
     MOI.optimize!(moi_master(master))
-    
+
     # Get objective value
     obj_value = MOI.get(moi_master(master), MOI.ObjectiveValue())
     # Get variable primal values
@@ -101,7 +101,7 @@ function check_primal_ip_feasibility!(::MasterPrimalSolution, ::DantzigWolfeColG
 end
 
 function update_inc_primal_sol!(::DantzigWolfeColGenImpl, ::Nothing, ::ProjectedIpPrimalSol)
-    
+
 end
 
 
@@ -114,26 +114,26 @@ end
 # Reduced costs
 
 struct ReducedCosts
-    values::Dict{Any, Dict{MOI.VariableIndex, Float64}}
+    values::Dict{Any,Dict{MOI.VariableIndex,Float64}}
 end
 
 
 function compute_reduced_costs!(context::DantzigWolfeColGenImpl, phase::MixedPhase1and2, mast_dual_sol::MasterDualSolution)
-    reduced_costs_dict = Dict{Any, Dict{MOI.VariableIndex, Float64}}()
-    
+    reduced_costs_dict = Dict{Any,Dict{MOI.VariableIndex,Float64}}()
+
     for (sp_id, pricing_sp) in get_pricing_subprobs(context)
-        sp_reduced_costs = Dict{MOI.VariableIndex, Float64}()
-        
+        sp_reduced_costs = Dict{MOI.VariableIndex,Float64}()
+
         # Direct access to mappings from PricingSubproblem
         coupling_mapping = pricing_sp.coupling_constr_mapping
-        
+
         # Compute reduced costs: original_cost - dual_contribution
         for (var_index, original_cost) in pricing_sp.original_cost_mapping
             dual_contribution = 0.0
-            
+
             # Get constraint coefficients for this variable using new RK structure
             coefficients = RK.get_variable_coefficients(coupling_mapping, var_index)
-            
+
             for (constraint_type, constraint_value, coeff) in coefficients
                 # Direct lookup in type-stable dual solution structure
                 if haskey(mast_dual_sol.constraint_duals, constraint_type)
@@ -144,13 +144,13 @@ function compute_reduced_costs!(context::DantzigWolfeColGenImpl, phase::MixedPha
                     end
                 end
             end
-            
+
             sp_reduced_costs[var_index] = original_cost - dual_contribution
         end
-        
+
         reduced_costs_dict[sp_id] = sp_reduced_costs
     end
-    
+
     return ReducedCosts(reduced_costs_dict)
 end
 
@@ -159,12 +159,12 @@ function update_reduced_costs!(context::DantzigWolfeColGenImpl, ::MixedPhase1and
     for (sp_id, pricing_sp) in get_pricing_subprobs(context)
         if haskey(red_costs.values, sp_id)
             sp_reduced_costs = red_costs.values[sp_id]
-            
+
             # Update objective coefficients directly in the MOI model
             for (var_index, reduced_cost) in sp_reduced_costs
                 # Use MOI to modify the objective coefficient
-                MOI.modify(pricing_sp.moi_model, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}(), 
-                          MOI.ScalarCoefficientChange(var_index, reduced_cost))
+                MOI.modify(pricing_sp.moi_model, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}(),
+                    MOI.ScalarCoefficientChange(var_index, reduced_cost))
             end
         end
     end
@@ -201,12 +201,24 @@ get_primal_bound(sol::PricingSolution) = sol.primal_bound
 get_dual_bound(sol::PricingSolution) = sol.dual_bound
 
 
-struct PricingPrimalMoiSolution 
-    obj_value::Float64
-    variable_values::Dict{MOI.VariableIndex, Float64}
+struct PricingPrimalMoiSolution
+    subproblem_id::Any  # Subproblem that generated this solution
+    obj_value::Float64  # This is the reduced cost
+    variable_values::Dict{MOI.VariableIndex,Float64}
 end
-push_in_set!(::DantzigWolfeColGenImpl, ::SetOfColumns, ::PricingPrimalMoiSolution) = true
 
+# Set of columns
+
+struct PricingPrimalMoiSolutionToInsert
+    collection::Vector{PricingPrimalMoiSolution}
+end
+set_of_columns(::DantzigWolfeColGenImpl) = PricingPrimalMoiSolutionToInsert(PricingPrimalMoiSolution[])
+
+function push_in_set!(set::PricingPrimalMoiSolutionToInsert, sol::PricingPrimalMoiSolution)
+    # TODO: make sure the column is valid.
+    push!(set.collection, sol)
+    return true
+end
 
 
 # Pricing
@@ -215,7 +227,7 @@ struct SubproblemMoiOptimizer end
 # TODO: implement pricing callback.
 get_pricing_subprob_optimizer(::ExactStage, ::PricingSubproblem) = SubproblemMoiOptimizer()
 
-function optimize_pricing_problem!(::DantzigWolfeColGenImpl, pricing_sp::PricingSubproblem, ::SubproblemMoiOptimizer, ::MasterDualSolution, stab_changes_mast_dual_sol)
+function optimize_pricing_problem!(::DantzigWolfeColGenImpl, sp_id::Any, pricing_sp::PricingSubproblem, ::SubproblemMoiOptimizer, ::MasterDualSolution, stab_changes_mast_dual_sol)
     MOI.optimize!(moi_pricing_sp(pricing_sp))
 
     # Get objective value
@@ -223,7 +235,7 @@ function optimize_pricing_problem!(::DantzigWolfeColGenImpl, pricing_sp::Pricing
 
     # Get variable primal values
     variable_values = _populate_variable_values(moi_pricing_sp(pricing_sp))
-    primal_sol = PricingPrimalMoiSolution(primal_obj_value, variable_values)
+    primal_sol = PricingPrimalMoiSolution(sp_id, primal_obj_value, variable_values)
 
     moi_termination_status = MOI.get(moi_pricing_sp(pricing_sp), MOI.TerminationStatus())
 
@@ -239,15 +251,91 @@ function optimize_pricing_problem!(::DantzigWolfeColGenImpl, pricing_sp::Pricing
     )
 end
 
-function compute_dual_bound(impl::DantzigWolfeColGenImpl, ::MixedPhase1and2, sps_db::Dict{Int64, Nothing}, generated_columns::SetOfColumns, sep_mast_dual_sol::MasterDualSolution)
+function compute_dual_bound(impl::DantzigWolfeColGenImpl, ::MixedPhase1and2, sps_db::Dict{Int64,Float64}, generated_columns::PricingPrimalMoiSolutionToInsert, sep_mast_dual_sol::MasterDualSolution)
     return 0.0
 end
 
 
+function _compute_original_column_cost(column::PricingPrimalMoiSolution, original_cost_mapping::RK.OriginalCostMapping)
+    # Compute the original cost of the column using costs from the compact formulation
+    # This is ∑(c_i * x_i) where c_i are original variable costs and x_i are solution values
+    original_cost = 0.0
+    for (var_index, var_value) in column.variable_values
+        if haskey(original_cost_mapping, var_index)
+            original_cost += original_cost_mapping[var_index] * var_value
+        end
+    end
+    return original_cost
+end
 
+function _compute_master_constraint_membership(
+    column::PricingPrimalMoiSolution, 
+    coupling_mapping::RK.CouplingConstraintMapping,
+    reformulation::RK.DantzigWolfeReformulation
+)
+    constraint_coeffs = Dict{MOI.ConstraintIndex, Float64}()
+    sp_id = column.subproblem_id
+    
+    # Compute coupling constraint memberships (A * x for each constraint)
+    for (var_index, var_value) in column.variable_values
+        coefficients = RK.get_variable_coefficients(coupling_mapping, var_index)
+        for (constraint_type, constraint_value, coeff) in coefficients
+            constraint_ref = constraint_type(constraint_value)
+            constraint_coeffs[constraint_ref] = get(constraint_coeffs, constraint_ref, 0.0) + coeff * var_value
+        end
+    end
+    
+    # Add convexity constraint membership (coefficient = 1.0)
+    if haskey(reformulation.convexity_constraints_ub, sp_id)
+        conv_constraint_ref = JuMP.index(reformulation.convexity_constraints_ub[sp_id])
+        constraint_coeffs[conv_constraint_ref] = 1.0
+    end
+    if haskey(reformulation.convexity_constraints_lb, sp_id)
+        conv_constraint_ref = JuMP.index(reformulation.convexity_constraints_lb[sp_id])
+        constraint_coeffs[conv_constraint_ref] = 1.0
+    end
+    
+    return constraint_coeffs
+end
 
-function insert_columns!(::DantzigWolfeColGenImpl, ::MixedPhase1and2, ::SetOfColumns)
-    return 0
+function insert_columns!(context::DantzigWolfeColGenImpl, ::MixedPhase1and2, columns_to_insert::PricingPrimalMoiSolutionToInsert)
+    master = get_master(context)
+    master_moi = moi_master(master)
+    reformulation = get_reform(context)
+    pricing_subprobs = get_pricing_subprobs(context)
+    
+    cols_inserted = 0
+    
+    for column in columns_to_insert.collection
+        # Get subproblem information
+        sp_id = column.subproblem_id
+        pricing_sp = pricing_subprobs[sp_id]
+        
+        # Compute original column cost (from compact formulation variable costs)
+        original_cost = _compute_original_column_cost(column, pricing_sp.original_cost_mapping)
+        
+        # Compute master constraint membership (how much this solution contributes to each constraint)
+        constraint_memberships = _compute_master_constraint_membership(
+            column, 
+            pricing_sp.coupling_constr_mapping,
+            reformulation
+        )
+        
+        # Add the column variable to master
+        # - Lower bound 0.0: convex combination coefficients are non-negative
+        # - Constraint coeffs: membership values computed above
+        # - Objective coeff: original cost from compact formulation
+        column_var = add_variable!(
+            master_moi;
+            lower_bound = 0.0,
+            constraint_coeffs = constraint_memberships,
+            objective_coeff = original_cost
+        )
+        
+        cols_inserted += 1
+    end
+    
+    return cols_inserted
 end
 
 

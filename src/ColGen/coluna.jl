@@ -155,8 +155,8 @@ Arguments are:
 function run_colgen_iteration!(context, phase, stage, ip_primal_sol, stab)
     master = get_master(context)
     mast_result = optimize_master_lp_problem!(master, context)
-    println(context.reformulation.master_problem)
-    @show mast_result
+
+    @show get_obj_val(mast_result)
 
     O = colgen_iteration_output_type(context)
     is_min_sense = is_minimization(context)
@@ -191,7 +191,6 @@ function run_colgen_iteration!(context, phase, stage, ip_primal_sol, stab)
     end
 
     mast_dual_sol = get_dual_sol(mast_result)
-    @show mast_dual_sol
     if isnothing(mast_dual_sol)
         error("Column generation interrupted: LP solver did not return an optimal dual solution")
     end
@@ -265,14 +264,10 @@ function run_colgen_iteration!(context, phase, stage, ip_primal_sol, stab)
         pricing_strategy = get_pricing_strategy(context, phase)
         sp_to_solve_it = pricing_strategy_iterate(pricing_strategy)
 
-        println("-----")
-        println("-----")
-        println("-----")
-        @show pricing_strategy
         while !isnothing(sp_to_solve_it)
             (sp_id, sp_to_solve), state = sp_to_solve_it
             optimizer = get_pricing_subprob_optimizer(stage, sp_to_solve)
-            pricing_result = optimize_pricing_problem!(context, sp_to_solve, optimizer, mast_dual_sol, stab_changes_mast_dual_sol)
+            pricing_result = optimize_pricing_problem!(context, sp_id, sp_to_solve, optimizer, mast_dual_sol, stab_changes_mast_dual_sol)
 
             # Iteration continues only if the pricing solution is not infeasible nor unbounded.
             if is_infeasible(pricing_result)
@@ -290,7 +285,7 @@ function run_colgen_iteration!(context, phase, stage, ip_primal_sol, stab)
             for primal_sol in primal_sols # multi column generation support.
                 # The implementation  is reponsible for checking if the column is a candidate
                 # for insertion into the master.
-                if push_in_set!(context, generated_columns, primal_sol)
+                if push_in_set!(generated_columns, primal_sol)
                     nb_cols_pushed += 1
                 end
             end
