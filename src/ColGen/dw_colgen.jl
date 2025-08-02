@@ -4,6 +4,8 @@ struct PricingSubproblem{MoiModel}
     original_cost_mapping::RK.OriginalCostMapping
 end
 
+moi_pricing_sp(pricing_sp::PricingSubproblem) = pricing_sp.moi_model
+
 struct DantzigWolfeColGenImpl
     reformulation::RK.DantzigWolfeReformulation
     eq_art_vars::Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.EqualTo{Float64}}, Tuple{MOI.VariableIndex, MOI.VariableIndex}}
@@ -137,43 +139,35 @@ function setup_reformulation!(context::DantzigWolfeColGenImpl, phase::MixedPhase
     # Get all less-than-or-equal constraints in the master problem
     leq_constraints = MOI.get(master, MOI.ListOfConstraintIndices{MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}}())
     
-    # Add artificial variables for each ≤ constraint: ax ≤ b becomes ax + s = b where s ≥ 0
+    # Add artificial variables for each ≤ constraint: ax ≤ b becomes ax - s <= b where s ≥ 0
     for constraint_ref in leq_constraints
-        # Determine if this is a convexity constraint
         is_convexity = constraint_ref in convexity_leq_refs
         constraint_cost = is_convexity ? convexity_cost : cost
         
-        # For ax ≤ b, we only need one artificial variable with positive coefficient
-        # This allows the constraint to be violated upwards (ax can exceed b)
-        s_pos = add_variable!(master;
-            lower_bound=0.0,
-            constraint_coeffs=Dict(constraint_ref => 1.0),
-            objective_coeff=constraint_cost
-        )
-        
-        # Store in tracking dictionary
-        context.leq_art_vars[constraint_ref] = s_pos
-    end
-    
-    # Get all greater-than-or-equal constraints in the master problem
-    geq_constraints = MOI.get(master, MOI.ListOfConstraintIndices{MOI.ScalarAffineFunction{Float64}, MOI.GreaterThan{Float64}}())
-    
-    # Add artificial variables for each ≥ constraint: ax ≥ b becomes ax - s = b where s ≥ 0  
-    for constraint_ref in geq_constraints
-        # Determine if this is a convexity constraint
-        is_convexity = constraint_ref in convexity_geq_refs
-        constraint_cost = is_convexity ? convexity_cost : cost
-        
-        # For ax ≥ b, we need one artificial variable with negative coefficient
-        # This allows the constraint to be violated downwards (ax can be less than b)
         s_neg = add_variable!(master;
             lower_bound=0.0,
             constraint_coeffs=Dict(constraint_ref => -1.0),
             objective_coeff=constraint_cost
         )
         
-        # Store in tracking dictionary
-        context.geq_art_vars[constraint_ref] = s_neg
+        context.leq_art_vars[constraint_ref] = s_neg
+    end
+    
+    # Get all greater-than-or-equal constraints in the master problem
+    geq_constraints = MOI.get(master, MOI.ListOfConstraintIndices{MOI.ScalarAffineFunction{Float64}, MOI.GreaterThan{Float64}}())
+    
+    # Add artificial variables for each ≥ constraint: ax ≥ b becomes ax + s >= b where s ≥ 0  
+    for constraint_ref in geq_constraints
+        is_convexity = constraint_ref in convexity_geq_refs
+        constraint_cost = is_convexity ? convexity_cost : cost
+    
+        s_pos = add_variable!(master;
+            lower_bound=0.0,
+            constraint_coeffs=Dict(constraint_ref => 1.0),
+            objective_coeff=constraint_cost
+        )
+        
+        context.geq_art_vars[constraint_ref] = s_pos
     end
 end
 
@@ -193,32 +187,6 @@ colgen_iteration_output_type(::DantzigWolfeColGenImpl) = ColGenIterationOutput
 
 struct SetOfColumns end
 set_of_columns(::DantzigWolfeColGenImpl) = SetOfColumns()
-
-
-
-
-
-function compute_sp_init_db(::DantzigWolfeColGenImpl, ::PricingSubproblem)
-
-end
-
-function compute_sp_init_pb(::DantzigWolfeColGenImpl, ::PricingSubproblem)
-
-end
-
-struct PriceAllSubproblemsStrategy 
-    collection
-end
-get_pricing_strategy(impl::DantzigWolfeColGenImpl, ::MixedPhase1and2) = PriceAllSubproblemsStrategy(get_pricing_subprobs(impl))
-pricing_strategy_iterate(impl::PriceAllSubproblemsStrategy) = iterate(impl.collection)
-pricing_strategy_iterate(impl::PriceAllSubproblemsStrategy, state) = iterate(impl.collection, state)
-
-struct SubproblemOptimizer end
-get_pricing_subprob_optimizer(stage::ExactStage, sp_to_solve::PricingSubproblem) = SubproblemOptimizer()
-
-
-
-
 
 
 

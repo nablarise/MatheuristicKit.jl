@@ -74,14 +74,14 @@ function test_setup_reformulation_with_artificial_variables()
     leq_art_var = context.leq_art_vars[leq_constraint_ref]
     leq_constraint_func = MOI.get(master_moi, MOI.ConstraintFunction(), leq_constraint_ref)
     leq_terms_dict = Dict(term.variable => term.coefficient for term in leq_constraint_func.terms)
-    @test leq_terms_dict[leq_art_var] == 1.0  # Should be +1.0 for ≤ constraints
+    @test leq_terms_dict[leq_art_var] == -1.0  # Should be -1.0 for ≤ constraints
     
     # ≥ constraint: x1 - x2 >= 2.0 should become x1 - x2 - s_geq >= 2.0
     geq_constraint_ref = JuMP.index(geq_constraint)
     geq_art_var = context.geq_art_vars[geq_constraint_ref]
     geq_constraint_func = MOI.get(master_moi, MOI.ConstraintFunction(), geq_constraint_ref)
     geq_terms_dict = Dict(term.variable => term.coefficient for term in geq_constraint_func.terms)
-    @test geq_terms_dict[geq_art_var] == -1.0  # Should be -1.0 for ≥ constraints
+    @test geq_terms_dict[geq_art_var] == +1.0  # Should be +1.0 for ≥ constraints
     
     # Verify objective function includes artificial variables with correct costs
     obj_func = MOI.get(master_moi, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}())
@@ -105,15 +105,15 @@ function test_setup_reformulation_with_artificial_variables()
     @test obj_terms_dict[conv_geq_art_var] == 10000.0  # 10x higher cost
     
     # Verify coefficients of artificial variables in convexity constraints
-    # Convexity ≤ constraint should have artificial variable with coefficient +1.0
+    # Convexity ≤ constraint should have artificial variable with coefficient -1.0
     conv_leq_constraint_func = MOI.get(master_moi, MOI.ConstraintFunction(), conv_leq_ref)
     conv_leq_terms_dict = Dict(term.variable => term.coefficient for term in conv_leq_constraint_func.terms)
-    @test conv_leq_terms_dict[conv_leq_art_var] == 1.0  # Should be +1.0 for ≤ constraints
+    @test conv_leq_terms_dict[conv_leq_art_var] == -1.0 
     
-    # Convexity ≥ constraint should have artificial variable with coefficient -1.0
+    # Convexity ≥ constraint should have artificial variable with coefficient +1.0
     conv_geq_constraint_func = MOI.get(master_moi, MOI.ConstraintFunction(), conv_geq_ref)
     conv_geq_terms_dict = Dict(term.variable => term.coefficient for term in conv_geq_constraint_func.terms)
-    @test conv_geq_terms_dict[conv_geq_art_var] == -1.0  # Should be -1.0 for ≥ constraints
+    @test conv_geq_terms_dict[conv_geq_art_var] == +1.0
 end
 
 function test_dw_colgen()

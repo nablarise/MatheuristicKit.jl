@@ -155,6 +155,8 @@ Arguments are:
 function run_colgen_iteration!(context, phase, stage, ip_primal_sol, stab)
     master = get_master(context)
     mast_result = optimize_master_lp_problem!(master, context)
+    println(context.reformulation.master_problem)
+    @show mast_result
 
     O = colgen_iteration_output_type(context)
     is_min_sense = is_minimization(context)
@@ -165,6 +167,7 @@ function run_colgen_iteration!(context, phase, stage, ip_primal_sol, stab)
     elseif is_unbounded(mast_result)
         throw(UnboundedProblemError("Unbounded master problem."))
     end
+
 
     # Master primal solution
     mast_primal_sol = get_primal_sol(mast_result)
@@ -251,7 +254,7 @@ function run_colgen_iteration!(context, phase, stage, ip_primal_sol, stab)
         # So we ask for an initial dual bound for each pricing subproblem that we update when
         # solving the pricing subproblem.
         # Depending on the pricing strategy, the user can choose to solve only some subproblems.
-        # If the some subproblems have not been solved, we use this initial dual bound to
+        # If some subproblems have not been solved, we use this initial dual bound to
         # compute the master dual bound.
         sps_db = Dict(sp_id => compute_sp_init_db(context, sp) for (sp_id, sp) in get_pricing_subprobs(context))
 
@@ -261,7 +264,11 @@ function run_colgen_iteration!(context, phase, stage, ip_primal_sol, stab)
         # Solve pricing subproblems
         pricing_strategy = get_pricing_strategy(context, phase)
         sp_to_solve_it = pricing_strategy_iterate(pricing_strategy)
-        
+
+        println("-----")
+        println("-----")
+        println("-----")
+        @show pricing_strategy
         while !isnothing(sp_to_solve_it)
             (sp_id, sp_to_solve), state = sp_to_solve_it
             optimizer = get_pricing_subprob_optimizer(stage, sp_to_solve)

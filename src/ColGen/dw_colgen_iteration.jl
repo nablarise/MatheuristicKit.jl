@@ -1,3 +1,5 @@
+# Master
+
 struct MasterPrimalSolution 
     obj_value::Float64
     variable_values::Dict{MOI.VariableIndex, Float64}
@@ -109,11 +111,11 @@ function update_master_constrs_dual_vals!(::DantzigWolfeColGenImpl, ::MasterDual
     return nothing
 end
 
+# Reduced costs
 
 struct ReducedCosts
     values::Dict{Any, Dict{MOI.VariableIndex, Float64}}
 end
-
 
 
 function compute_reduced_costs!(context::DantzigWolfeColGenImpl, phase::MixedPhase1and2, mast_dual_sol::MasterDualSolution)
@@ -152,39 +154,6 @@ function compute_reduced_costs!(context::DantzigWolfeColGenImpl, phase::MixedPha
     return ReducedCosts(reduced_costs_dict)
 end
 
-function optimize_pricing_problem!(::DantzigWolfeColGenImpl, ::PricingSubproblem, ::SubproblemOptimizer, ::MasterDualSolution, stab_changes_mast_dual_sol)
-    @assert !stab_changes_mast_dual_sol
-    return PricingSolution()
-end
-
-function compute_dual_bound(impl::DantzigWolfeColGenImpl, ::MixedPhase1and2, sps_db::Dict{Int64, Nothing}, generated_columns::SetOfColumns, sep_mast_dual_sol::MasterDualSolution)
-    return 0.0
-end
-
-
-
-struct PricingSolution end
-
-is_infeasible(::PricingSolution) = false
-is_unbounded(::PricingSolution) = false
-
-
-struct PricingPrimalSolution end
-get_primal_sols(::PricingSolution) = [PricingPrimalSolution(), PricingPrimalSolution()]
-push_in_set!(::DantzigWolfeColGenImpl, ::SetOfColumns, ::PricingPrimalSolution) = true
-
-get_primal_bound(::PricingSolution) = nothing
-get_dual_bound(::PricingSolution) = nothing
-
-
-
-
-
-function insert_columns!(::DantzigWolfeColGenImpl, ::MixedPhase1and2, ::SetOfColumns)
-    return 0
-end
-
-
 function update_reduced_costs!(context::DantzigWolfeColGenImpl, ::MixedPhase1and2, red_costs::ReducedCosts)
     # Update objective coefficients in each subproblem with reduced costs
     for (sp_id, pricing_sp) in get_pricing_subprobs(context)
@@ -200,3 +169,87 @@ function update_reduced_costs!(context::DantzigWolfeColGenImpl, ::MixedPhase1and
         end
     end
 end
+
+# Initial subproblem dual & primal bounds
+
+compute_sp_init_db(impl::DantzigWolfeColGenImpl, _) = is_minimization(impl) ? -Inf : Inf
+compute_sp_init_pb(impl::DantzigWolfeColGenImpl, _) = is_minimization(impl) ? Inf : -Inf
+
+# Pricing strategy
+
+struct DefaultPricingStrategy{PricingSubproblemIterator}
+    pricing_sps::PricingSubproblemIterator
+end
+get_pricing_strategy(impl::DantzigWolfeColGenImpl, ::MixedPhase1and2) = DefaultPricingStrategy(get_pricing_subprobs(impl))
+pricing_strategy_iterate(strategy::DefaultPricingStrategy) = iterate(strategy.pricing_sps)
+pricing_strategy_iterate(strategy::DefaultPricingStrategy, state) = iterate(strategy.pricing_sps, state)
+
+# Pricing solution
+
+struct PricingSolution{PricingPrimalSolution}
+    is_infeasible::Bool
+    is_unbounded::Bool
+    primal_bound::Float64
+    dual_bound::Float64
+    primal_sols::Vector{PricingPrimalSolution}
+end
+
+is_infeasible(sol::PricingSolution) = sol.is_infeasible
+is_unbounded(sol::PricingSolution) = sol.is_unbounded
+get_primal_sols(sol::PricingSolution) = sol.primal_sols
+get_primal_bound(::PricingSolution) = sol.primal_bound
+get_dual_bound(::PricingSolution) = sol.dual_bound
+
+
+struct PricingPrimalMoiSolution 
+    obj_value::Float64
+    variable_values::Dict{MOI.VariableIndex, Float64}
+end
+push_in_set!(::DantzigWolfeColGenImpl, ::SetOfColumns, ::PricingPrimalMoiSolution) = true
+
+
+
+# Pricing
+
+struct SubproblemMoiOptimizer end
+# TODO: implement pricing callback.
+get_pricing_subprob_optimizer(::ExactStage, ::PricingSubproblem) = SubproblemMoiOptimizer()
+
+function optimize_pricing_problem!(::DantzigWolfeColGenImpl, pricing_sp::PricingSubproblem, ::SubproblemMoiOptimizer, ::MasterDualSolution, stab_changes_mast_dual_sol)
+    MOI.optimize!(moi_pricing_sp(pricing_sp))
+
+    # Get objective values
+    primal_obj_value = MOI.get(moi_pricing_sp(pricing_sp), MOI.ObjectiveValue())
+    dual_obj_value = MOI.get(moi_pricing_sp(pricing_sp), MOI.DualObjectiveValue())
+
+    # Get variable primal values
+    variable_values = _populate_variable_values(moi_pricing_sp(pricing_sp))
+    primal_sol = PricingPrimalMoiSolution(primal_obj_value, variable_values)
+
+    moi_termination_status = MOI.get(moi_pricing_sp(pricing_sp), MOI.TerminationStatus())
+
+    is_infeasible = moi_termination_status == MOI.INFEASIBLE
+    is_unbounded = moi_termination_status == MOI.DUAL_INFEASIBLE || moi_termination_status == MOI.INFEASIBLE_OR_UNBOUNDED
+
+    return PricingSolution(
+        is_infeasible,
+        is_unbounded,
+        primal_obj_value,
+        dual_obj_value,
+        [primal_sol]
+    )
+end
+
+function compute_dual_bound(impl::DantzigWolfeColGenImpl, ::MixedPhase1and2, sps_db::Dict{Int64, Nothing}, generated_columns::SetOfColumns, sep_mast_dual_sol::MasterDualSolution)
+    return 0.0
+end
+
+
+
+
+function insert_columns!(::DantzigWolfeColGenImpl, ::MixedPhase1and2, ::SetOfColumns)
+    return 0
+end
+
+
+
