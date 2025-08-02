@@ -190,15 +190,15 @@ struct PricingSolution{PricingPrimalSolution}
     is_infeasible::Bool
     is_unbounded::Bool
     primal_bound::Float64
-    dual_bound::Float64
+    dual_bound::Float64 # TODO: understand what we return here
     primal_sols::Vector{PricingPrimalSolution}
 end
 
 is_infeasible(sol::PricingSolution) = sol.is_infeasible
 is_unbounded(sol::PricingSolution) = sol.is_unbounded
 get_primal_sols(sol::PricingSolution) = sol.primal_sols
-get_primal_bound(::PricingSolution) = sol.primal_bound
-get_dual_bound(::PricingSolution) = sol.dual_bound
+get_primal_bound(sol::PricingSolution) = sol.primal_bound
+get_dual_bound(sol::PricingSolution) = sol.dual_bound
 
 
 struct PricingPrimalMoiSolution 
@@ -218,9 +218,8 @@ get_pricing_subprob_optimizer(::ExactStage, ::PricingSubproblem) = SubproblemMoi
 function optimize_pricing_problem!(::DantzigWolfeColGenImpl, pricing_sp::PricingSubproblem, ::SubproblemMoiOptimizer, ::MasterDualSolution, stab_changes_mast_dual_sol)
     MOI.optimize!(moi_pricing_sp(pricing_sp))
 
-    # Get objective values
+    # Get objective value
     primal_obj_value = MOI.get(moi_pricing_sp(pricing_sp), MOI.ObjectiveValue())
-    dual_obj_value = MOI.get(moi_pricing_sp(pricing_sp), MOI.DualObjectiveValue())
 
     # Get variable primal values
     variable_values = _populate_variable_values(moi_pricing_sp(pricing_sp))
@@ -235,7 +234,7 @@ function optimize_pricing_problem!(::DantzigWolfeColGenImpl, pricing_sp::Pricing
         is_infeasible,
         is_unbounded,
         primal_obj_value,
-        dual_obj_value,
+        primal_obj_value, # exact phase so primal bound == dual bound
         [primal_sol]
     )
 end

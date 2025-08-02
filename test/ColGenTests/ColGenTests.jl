@@ -48,6 +48,9 @@ function run()
 
     reformulation = RK.dantzig_wolfe_decomposition(model, dw_annotation)
     JuMP.set_optimizer(RK.master(reformulation), GLPK.Optimizer)
+    for (sp_id, sp_model) in RK.subproblems(reformulation)
+        JuMP.set_optimizer(sp_model, GLPK.Optimizer) 
+    end
 
 
     MK.ColGen.run_column_generation(reformulation)
