@@ -305,10 +305,10 @@ function run_colgen_iteration!(context, phase, stage, ip_primal_sol, stab)
         end
 
         # compute valid dual bound using the dual bounds returned by the user (cf pricing result).
-        valid_db = compute_dual_bound(context, phase, sps_db, generated_columns, sep_mast_dual_sol)
+        valid_db = compute_dual_bound(context, phase, sps_db, sep_mast_dual_sol)
     
         # pseudo dual bound is used for stabilization only.
-        pseudo_db = compute_dual_bound(context, phase, sps_pb, generated_columns, sep_mast_dual_sol)
+        pseudo_db = compute_dual_bound(context, phase, sps_pb, sep_mast_dual_sol)
 
         update_stabilization_after_pricing_optim!(stab, context, generated_columns, master, pseudo_db, sep_mast_dual_sol)
 
