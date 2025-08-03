@@ -269,7 +269,8 @@ function test_compute_original_column_cost_basic()
     column = MK.ColGen.PricingPrimalMoiSolution(
         1,  # subproblem_id
         -5.0,  # obj_value (reduced cost, not used in this test)
-        variable_values_dict
+        variable_values_dict,
+        true  # is_improving (negative reduced cost for minimization)
     )
     
     # Call the function under test
@@ -355,7 +356,8 @@ function test_compute_master_constraint_membership_basic()
     column = MK.ColGen.PricingPrimalMoiSolution(
         1,  # subproblem_id
         -2.0,  # obj_value (reduced cost, not used in this test)
-        variable_values_dict
+        variable_values_dict,
+        true  # is_improving (negative reduced cost for minimization)
     )
     
     # Call the function under test
@@ -387,7 +389,8 @@ function test_compute_master_constraint_membership_basic()
     empty_column = MK.ColGen.PricingPrimalMoiSolution(
         1,  # subproblem_id
         0.0,  # obj_value
-        Dict{MOI.VariableIndex, Float64}()  # empty variable values
+        Dict{MOI.VariableIndex, Float64}(),  # empty variable values
+        false  # is_improving (zero reduced cost is not improving)
     )
     empty_result = MK.ColGen._compute_master_constraint_membership(empty_column, coupling_mapping, reformulation)
     

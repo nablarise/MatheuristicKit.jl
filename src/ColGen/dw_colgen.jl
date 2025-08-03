@@ -178,7 +178,13 @@ function stop_colgen_phase(context::DantzigWolfeColGenImpl, ::MixedPhase1and2, c
     return iteration > 10
 end
 
-struct ColGenIterationOutput end
+struct ColGenIterationOutput
+    master_lp_obj::Union{Float64, Nothing}
+    dual_bound::Union{Float64, Nothing}
+    nb_columns_added::Int64
+    master_lp_primal_sol::Any
+    master_ip_primal_sol::Any
+end
 
 colgen_iteration_output_type(::DantzigWolfeColGenImpl) = ColGenIterationOutput
 
@@ -199,10 +205,10 @@ function new_iteration_output(::Type{<:ColGenIterationOutput},
     master_ip_primal_sol,
     master_lp_dual_sol,
 )
-    return ColGenIterationOutput()
+    return ColGenIterationOutput(mlp, db, nb_new_cols, master_lp_primal_sol, master_ip_primal_sol)
 end
 
-get_dual_bound(::ColGenIterationOutput) = 0.0
+get_dual_bound(output::ColGenIterationOutput) = output.dual_bound
 
 function after_colgen_iteration(
     impl::DantzigWolfeColGenImpl, 
@@ -213,7 +219,28 @@ function after_colgen_iteration(
     ip_primal_sol::Nothing, 
     colgen_iter_output::ColGenIterationOutput
 ) 
-    # Do nothing
+    # Log iteration information
+    print("Iter $colgen_iterations | ")
+    print("Cols: $(colgen_iter_output.nb_columns_added) | ")
+    
+    # Dual bound
+    if !isnothing(colgen_iter_output.dual_bound)
+        print("DB: $(round(colgen_iter_output.dual_bound, digits=2)) | ")
+    else
+        print("DB: N/A | ")
+    end
+    
+    # LP master objective
+    if !isnothing(colgen_iter_output.master_lp_obj)
+        print("LP: $(round(colgen_iter_output.master_lp_obj, digits=2)) | ")
+    else
+        print("LP: N/A | ")
+    end
+    
+    # IP primal bound (always Nothing in this signature, but show structure for completeness)
+    print("IP: N/A")
+    
+    println()
 end
 
 is_better_dual_bound(

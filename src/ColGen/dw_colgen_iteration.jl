@@ -205,6 +205,7 @@ struct PricingPrimalMoiSolution
     subproblem_id::Any  # Subproblem that generated this solution
     obj_value::Float64  # This is the reduced cost
     variable_values::Dict{MOI.VariableIndex,Float64}
+    is_improving::Bool  # Whether this solution has an improving reduced cost
 end
 
 # Set of columns
@@ -215,9 +216,13 @@ end
 set_of_columns(::DantzigWolfeColGenImpl) = PricingPrimalMoiSolutionToInsert(PricingPrimalMoiSolution[])
 
 function push_in_set!(set::PricingPrimalMoiSolutionToInsert, sol::PricingPrimalMoiSolution)
-    # TODO: make sure the column is valid.
-    push!(set.collection, sol)
-    return true
+    # Only add columns with improving reduced costs
+    if sol.is_improving
+        push!(set.collection, sol)
+        return true
+    else
+        return false  # Column filtered out due to non-improving reduced cost
+    end
 end
 
 
@@ -227,15 +232,24 @@ struct SubproblemMoiOptimizer end
 # TODO: implement pricing callback.
 get_pricing_subprob_optimizer(::ExactStage, ::PricingSubproblem) = SubproblemMoiOptimizer()
 
-function optimize_pricing_problem!(::DantzigWolfeColGenImpl, sp_id::Any, pricing_sp::PricingSubproblem, ::SubproblemMoiOptimizer, ::MasterDualSolution, stab_changes_mast_dual_sol)
+function optimize_pricing_problem!(context::DantzigWolfeColGenImpl, sp_id::Any, pricing_sp::PricingSubproblem, ::SubproblemMoiOptimizer, ::MasterDualSolution, stab_changes_mast_dual_sol)
     MOI.optimize!(moi_pricing_sp(pricing_sp))
 
     # Get objective value
     primal_obj_value = MOI.get(moi_pricing_sp(pricing_sp), MOI.ObjectiveValue())
 
+    # Determine if this solution has an improving reduced cost
+    # For minimization: negative reduced cost is improving
+    # For maximization: positive reduced cost is improving
+    is_improving = if is_minimization(context)
+        primal_obj_value < 0
+    else
+        primal_obj_value > 0
+    end
+
     # Get variable primal values
     variable_values = _populate_variable_values(moi_pricing_sp(pricing_sp))
-    primal_sol = PricingPrimalMoiSolution(sp_id, primal_obj_value, variable_values)
+    primal_sol = PricingPrimalMoiSolution(sp_id, primal_obj_value, variable_values, is_improving)
 
     moi_termination_status = MOI.get(moi_pricing_sp(pricing_sp), MOI.TerminationStatus())
 

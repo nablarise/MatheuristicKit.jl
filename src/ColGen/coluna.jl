@@ -156,8 +156,6 @@ function run_colgen_iteration!(context, phase, stage, ip_primal_sol, stab)
     master = get_master(context)
     mast_result = optimize_master_lp_problem!(master, context)
 
-    @show get_obj_val(mast_result)
-
     O = colgen_iteration_output_type(context)
     is_min_sense = is_minimization(context)
     # Iteration continues only if master is not infeasible nor unbounded and has dual
