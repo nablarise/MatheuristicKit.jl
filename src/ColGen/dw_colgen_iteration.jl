@@ -266,16 +266,15 @@ function optimize_pricing_problem!(context::DantzigWolfeColGenImpl, sp_id::Any, 
 end
 
 function _convexity_contrib(impl::DantzigWolfeColGenImpl, sep_mast_dual_sol::MasterDualSolution)
-    reformulation = get_reform(impl)
+    master = get_master(impl)
     convexity_contribution = 0.0
     
     # Process convexity upper bound constraints (≤)
-    for (sp_id, conv_constraint_ref) in reformulation.convexity_constraints_ub
+    for (sp_id, conv_constraint_ref) in master.convexity_constraints_ub
         constraint_index = JuMP.index(conv_constraint_ref)
         constraint_type = typeof(constraint_index)
         constraint_value = constraint_index.value
-        master_backend = JuMP.backend(RK.master(reformulation))
-        constraint_set = MOI.get(master_backend, MOI.ConstraintSet(), constraint_index)
+        constraint_set = MOI.get(master.moi_master, MOI.ConstraintSet(), constraint_index)
         rhs = constraint_set.upper
         
         if haskey(sep_mast_dual_sol.constraint_duals, constraint_type)
@@ -288,12 +287,11 @@ function _convexity_contrib(impl::DantzigWolfeColGenImpl, sep_mast_dual_sol::Mas
     end
     
     # Process convexity lower bound constraints (≥)
-    for (sp_id, conv_constraint_ref) in reformulation.convexity_constraints_lb
+    for (sp_id, conv_constraint_ref) in master.convexity_constraints_lb
         constraint_index = JuMP.index(conv_constraint_ref)
         constraint_type = typeof(constraint_index)
         constraint_value = constraint_index.value
-        master_backend = JuMP.backend(RK.master(reformulation))
-        constraint_set = MOI.get(master_backend, MOI.ConstraintSet(), constraint_index)
+        constraint_set = MOI.get(master.moi_master, MOI.ConstraintSet(), constraint_index)
         rhs = constraint_set.lower
         
         if haskey(sep_mast_dual_sol.constraint_duals, constraint_type)
@@ -311,8 +309,7 @@ end
 function _subprob_contrib(impl::DantzigWolfeColGenImpl, sps_db::Dict{Int64,Float64})
     # Compute contribution from subproblem variables using multiplicity bounds
     # Contribution = reduced_cost * multiplicity, where multiplicity depends on reduced cost sign
-    reformulation = get_reform(impl)
-    master_backend = JuMP.backend(RK.master(reformulation))
+    master = get_master(impl)
     subprob_contribution = 0.0
     
     for (sp_id, reduced_cost) in sps_db
@@ -320,15 +317,15 @@ function _subprob_contrib(impl::DantzigWolfeColGenImpl, sps_db::Dict{Int64,Float
         
         # Determine multiplicity based on reduced cost sign
         if reduced_cost < 0  # Improving reduced cost: use upper multiplicity
-            if haskey(reformulation.convexity_constraints_ub, sp_id)
-                constraint_index = JuMP.index(reformulation.convexity_constraints_ub[sp_id])
-                constraint_set = MOI.get(master_backend, MOI.ConstraintSet(), constraint_index)
+            if haskey(master.convexity_constraints_ub, sp_id)
+                constraint_index = JuMP.index(master.convexity_constraints_ub[sp_id])
+                constraint_set = MOI.get(master.moi_master, MOI.ConstraintSet(), constraint_index)
                 multiplicity = constraint_set.upper
             end
         else  # Non-improving reduced cost: use lower multiplicity
-            if haskey(reformulation.convexity_constraints_lb, sp_id)
-                constraint_index = JuMP.index(reformulation.convexity_constraints_lb[sp_id])
-                constraint_set = MOI.get(master_backend, MOI.ConstraintSet(), constraint_index)
+            if haskey(master.convexity_constraints_lb, sp_id)
+                constraint_index = JuMP.index(master.convexity_constraints_lb[sp_id])
+                constraint_set = MOI.get(master.moi_master, MOI.ConstraintSet(), constraint_index)
                 multiplicity = constraint_set.lower
             end
         end
@@ -364,7 +361,7 @@ end
 function _compute_master_constraint_membership(
     column::PricingPrimalMoiSolution, 
     coupling_mapping::RK.CouplingConstraintMapping,
-    reformulation::RK.DantzigWolfeReformulation
+    master::Master
 )
     constraint_coeffs = Dict{MOI.ConstraintIndex, Float64}()
     sp_id = column.subproblem_id
@@ -379,12 +376,12 @@ function _compute_master_constraint_membership(
     end
     
     # Add convexity constraint membership (coefficient = 1.0)
-    if haskey(reformulation.convexity_constraints_ub, sp_id)
-        conv_constraint_ref = JuMP.index(reformulation.convexity_constraints_ub[sp_id])
+    if haskey(master.convexity_constraints_ub, sp_id)
+        conv_constraint_ref = JuMP.index(master.convexity_constraints_ub[sp_id])
         constraint_coeffs[conv_constraint_ref] = 1.0
     end
-    if haskey(reformulation.convexity_constraints_lb, sp_id)
-        conv_constraint_ref = JuMP.index(reformulation.convexity_constraints_lb[sp_id])
+    if haskey(master.convexity_constraints_lb, sp_id)
+        conv_constraint_ref = JuMP.index(master.convexity_constraints_lb[sp_id])
         constraint_coeffs[conv_constraint_ref] = 1.0
     end
     
@@ -394,7 +391,6 @@ end
 function insert_columns!(context::DantzigWolfeColGenImpl, ::MixedPhase1and2, columns_to_insert::PricingPrimalMoiSolutionToInsert)
     master = get_master(context)
     master_moi = moi_master(master)
-    reformulation = get_reform(context)
     pricing_subprobs = get_pricing_subprobs(context)
     
     cols_inserted = 0
@@ -411,7 +407,7 @@ function insert_columns!(context::DantzigWolfeColGenImpl, ::MixedPhase1and2, col
         constraint_memberships = _compute_master_constraint_membership(
             column, 
             pricing_sp.coupling_constr_mapping,
-            reformulation
+            master
         )
         
         # Add the column variable to master

@@ -360,8 +360,18 @@ function test_compute_master_constraint_membership_basic()
         true  # is_improving (negative reduced cost for minimization)
     )
     
+    # Create a Master with the convexity constraints
+    master = MK.ColGen.Master(
+        nothing,  # moi_master not needed for this test
+        reformulation.convexity_constraints_ub,
+        reformulation.convexity_constraints_lb,
+        Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.EqualTo{Float64}}, Tuple{MOI.VariableIndex, MOI.VariableIndex}}(),
+        Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}}, MOI.VariableIndex}(),
+        Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.GreaterThan{Float64}}, MOI.VariableIndex}()
+    )
+    
     # Call the function under test
-    result = MK.ColGen._compute_master_constraint_membership(column, coupling_mapping, reformulation)
+    result = MK.ColGen._compute_master_constraint_membership(column, coupling_mapping, master)
     
     # Verify coupling constraint memberships
     geq_constraint_ref = geq_constraint_type(101)
@@ -392,7 +402,7 @@ function test_compute_master_constraint_membership_basic()
         Dict{MOI.VariableIndex, Float64}(),  # empty variable values
         false  # is_improving (zero reduced cost is not improving)
     )
-    empty_result = MK.ColGen._compute_master_constraint_membership(empty_column, coupling_mapping, reformulation)
+    empty_result = MK.ColGen._compute_master_constraint_membership(empty_column, coupling_mapping, master)
     
     # Should only have convexity constraints with coefficient 1.0
     @test length(empty_result) == 2  # Only convexity constraints

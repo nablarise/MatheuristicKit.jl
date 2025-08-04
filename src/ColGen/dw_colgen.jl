@@ -6,27 +6,52 @@ end
 
 moi_pricing_sp(pricing_sp::PricingSubproblem) = pricing_sp.moi_model
 
-struct DantzigWolfeColGenImpl
+# Provider types for production use
+struct ReformulationMasterProvider
     reformulation::RK.DantzigWolfeReformulation
     eq_art_vars::Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.EqualTo{Float64}}, Tuple{MOI.VariableIndex, MOI.VariableIndex}}
     leq_art_vars::Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}}, MOI.VariableIndex}
     geq_art_vars::Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.GreaterThan{Float64}}, MOI.VariableIndex}
+end
+
+struct ReformulationPricingSubprobsProvider
+    reformulation::RK.DantzigWolfeReformulation
+end
+
+
+struct DantzigWolfeColGenImpl{M, P}
+    master_provider::M           # Master + convexity + optimization sense + artificial vars
+    pricing_subprobs_provider::P # Contains all mapping objects (coupling_constr_mapping, original_cost_mapping)
     
     function DantzigWolfeColGenImpl(reformulation::RK.DantzigWolfeReformulation)
-        eq_art_vars = Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.EqualTo{Float64}}, Tuple{MOI.VariableIndex, MOI.VariableIndex}}()
-        leq_art_vars = Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}}, MOI.VariableIndex}()
-        geq_art_vars = Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.GreaterThan{Float64}}, MOI.VariableIndex}()
-        
         # Assert optimizer is attached (should be validated upstream)
         master_backend = JuMP.backend(RK.master(reformulation))
         @assert master_backend.optimizer !== nothing "Master must have optimizer attached"
         
-        return new(reformulation, eq_art_vars, leq_art_vars, geq_art_vars)
+        # Create artificial variable tracking dictionaries
+        eq_art_vars = Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.EqualTo{Float64}}, Tuple{MOI.VariableIndex, MOI.VariableIndex}}()
+        leq_art_vars = Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}}, MOI.VariableIndex}()
+        geq_art_vars = Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.GreaterThan{Float64}}, MOI.VariableIndex}()
+        
+        # Create master provider that contains all master-related data
+        master_provider = ReformulationMasterProvider(reformulation, eq_art_vars, leq_art_vars, geq_art_vars)
+        
+        # Create pricing subproblems provider
+        pricing_subprobs_provider = ReformulationPricingSubprobsProvider(reformulation)
+        
+        return new{typeof(master_provider), typeof(pricing_subprobs_provider)}(master_provider, pricing_subprobs_provider)
+    end
+    
+    # Constructor for testing with custom providers
+    function DantzigWolfeColGenImpl(master_provider::M, pricing_subprobs_provider::P) where {M, P}
+        return new{M, P}(master_provider, pricing_subprobs_provider)
     end
 end
 
-struct Master{MoiModel}
+struct Master{MoiModel, C}
     moi_master::MoiModel
+    convexity_constraints_ub::C
+    convexity_constraints_lb::C
     eq_art_vars::Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.EqualTo{Float64}}, Tuple{MOI.VariableIndex, MOI.VariableIndex}}
     leq_art_vars::Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}}, MOI.VariableIndex}
     geq_art_vars::Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.GreaterThan{Float64}}, MOI.VariableIndex}
@@ -35,19 +60,29 @@ end
 moi_master(master::Master) = master.moi_master
 
 ## Reformulation API
-get_master(impl::DantzigWolfeColGenImpl) = Master(
-    JuMP.backend(RK.master(impl.reformulation)),
-    impl.eq_art_vars,
-    impl.leq_art_vars,
-    impl.geq_art_vars
+get_master(impl::DantzigWolfeColGenImpl) = get_master(impl.master_provider)
+get_reform(impl::DantzigWolfeColGenImpl) = get_reform(impl.master_provider)
+is_minimization(impl::DantzigWolfeColGenImpl) = is_minimization(impl.master_provider)
+get_pricing_subprobs(impl::DantzigWolfeColGenImpl) = get_pricing_subprobs(impl.pricing_subprobs_provider)
+
+# Provider interface methods for ReformulationMasterProvider
+get_master(provider::ReformulationMasterProvider) = Master(
+    JuMP.backend(RK.master(provider.reformulation)),
+    provider.reformulation.convexity_constraints_ub,
+    provider.reformulation.convexity_constraints_lb,
+    provider.eq_art_vars,
+    provider.leq_art_vars,
+    provider.geq_art_vars
 )
 
-get_reform(impl::DantzigWolfeColGenImpl) = impl.reformulation
-is_minimization(impl::DantzigWolfeColGenImpl) = MOI.get(get_master(impl).moi_master, MOI.ObjectiveSense()) != MOI.MAX_SENSE
-function get_pricing_subprobs(impl::DantzigWolfeColGenImpl)
+get_reform(provider::ReformulationMasterProvider) = provider.reformulation
+is_minimization(provider::ReformulationMasterProvider) = MOI.get(JuMP.backend(RK.master(provider.reformulation)), MOI.ObjectiveSense()) != MOI.MAX_SENSE
+
+# Provider interface methods for ReformulationPricingSubprobsProvider
+function get_pricing_subprobs(provider::ReformulationPricingSubprobsProvider)
     subproblems_dict = Dict{Any, PricingSubproblem}()
     
-    for (sp_id, jump_subproblem) in RK.subproblems(impl.reformulation)
+    for (sp_id, jump_subproblem) in RK.subproblems(provider.reformulation)
         # Extract MOI backend (preserving its concrete type)
         moi_model = JuMP.backend(jump_subproblem)
         
@@ -97,7 +132,11 @@ stop_colgen(::DantzigWolfeColGenImpl, ::Nothing) = false
 
 
 function setup_reformulation!(context::DantzigWolfeColGenImpl, phase::MixedPhase1and2)
-    reform = context.reformulation
+    setup_reformulation!(context.master_provider, phase)
+end
+
+function setup_reformulation!(provider::ReformulationMasterProvider, phase::MixedPhase1and2)
+    reform = provider.reformulation
     master_jump = RK.master(reform)
     master = JuMP.backend(master_jump)  # Get the MOI backend from JuMP model
     
@@ -133,7 +172,7 @@ function setup_reformulation!(context::DantzigWolfeColGenImpl, phase::MixedPhase
         )
         
         # Store in tracking dictionary
-        context.eq_art_vars[constraint_ref] = (s_pos, s_neg)
+        provider.eq_art_vars[constraint_ref] = (s_pos, s_neg)
     end
     
     # Get all less-than-or-equal constraints in the master problem
@@ -150,7 +189,7 @@ function setup_reformulation!(context::DantzigWolfeColGenImpl, phase::MixedPhase
             objective_coeff=constraint_cost
         )
         
-        context.leq_art_vars[constraint_ref] = s_neg
+        provider.leq_art_vars[constraint_ref] = s_neg
     end
     
     # Get all greater-than-or-equal constraints in the master problem
@@ -167,7 +206,7 @@ function setup_reformulation!(context::DantzigWolfeColGenImpl, phase::MixedPhase
             objective_coeff=constraint_cost
         )
         
-        context.geq_art_vars[constraint_ref] = s_pos
+        provider.geq_art_vars[constraint_ref] = s_pos
     end
 end
 

@@ -99,7 +99,7 @@ function test_successful_optimizer_attachment()
     # Test that constructor succeeds when optimizer is attached
     context = MK.ColGen.DantzigWolfeColGenImpl(reformulation)
     @test context isa MK.ColGen.DantzigWolfeColGenImpl
-    @test context.reformulation === reformulation
+    @test MK.ColGen.get_reform(context) === reformulation
     
     # Verify optimizer is actually attached to master
     master_backend = JuMP.backend(RK.master(reformulation))

@@ -13,6 +13,7 @@ const RK = ReformulationKit
 const MOI = MathOptInterface
 
 include("helpers.jl")
+include("test_utils.jl")
 include("dw_colgen.jl")
 include("dw_colgen_iteration.jl")
 include("optimizer_validation.jl")

@@ -46,18 +46,21 @@ function test_setup_reformulation_with_artificial_variables()
     # Call setup_reformulation! - this should add artificial variables
     MK.ColGen.setup_reformulation!(context, phase)
     
+    # Get the master provider to access artificial variables
+    master_provider = context.master_provider
+    
     # Verify artificial variables were stored in tracking dictionaries
-    @test length(context.eq_art_vars) == 1    # 1 equality constraint
-    @test length(context.leq_art_vars) == 2   # 2 ≤ constraints (regular + convexity)
-    @test length(context.geq_art_vars) == 2   # 2 ≥ constraints (regular + convexity)
+    @test length(master_provider.eq_art_vars) == 1    # 1 equality constraint
+    @test length(master_provider.leq_art_vars) == 2   # 2 ≤ constraints (regular + convexity)
+    @test length(master_provider.geq_art_vars) == 2   # 2 ≥ constraints (regular + convexity)
     
     # Get constraint references to verify specific mappings
     eq_constraint_ref = JuMP.constraint_ref_with_index(master, MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.EqualTo{Float64}}(1))
     
     # Test that equality constraint has 2 artificial variables
     eq_constraint_moi_ref = JuMP.index(eq_constraint_ref)
-    @test haskey(context.eq_art_vars, eq_constraint_moi_ref)
-    s_pos, s_neg = context.eq_art_vars[eq_constraint_moi_ref]
+    @test haskey(master_provider.eq_art_vars, eq_constraint_moi_ref)
+    s_pos, s_neg = master_provider.eq_art_vars[eq_constraint_moi_ref]
     @test s_pos isa MOI.VariableIndex
     @test s_neg isa MOI.VariableIndex
     @test s_pos != s_neg
@@ -71,14 +74,14 @@ function test_setup_reformulation_with_artificial_variables()
     # Verify coefficients of artificial variables in inequality constraints
     # ≤ constraint: x1 + x2 <= 10.0 should become x1 + x2 + s_leq <= 10.0
     leq_constraint_ref = JuMP.index(leq_constraint)
-    leq_art_var = context.leq_art_vars[leq_constraint_ref]
+    leq_art_var = master_provider.leq_art_vars[leq_constraint_ref]
     leq_constraint_func = MOI.get(master_moi, MOI.ConstraintFunction(), leq_constraint_ref)
     leq_terms_dict = Dict(term.variable => term.coefficient for term in leq_constraint_func.terms)
     @test leq_terms_dict[leq_art_var] == -1.0  # Should be -1.0 for ≤ constraints
     
     # ≥ constraint: x1 - x2 >= 2.0 should become x1 - x2 - s_geq >= 2.0
     geq_constraint_ref = JuMP.index(geq_constraint)
-    geq_art_var = context.geq_art_vars[geq_constraint_ref]
+    geq_art_var = master_provider.geq_art_vars[geq_constraint_ref]
     geq_constraint_func = MOI.get(master_moi, MOI.ConstraintFunction(), geq_constraint_ref)
     geq_terms_dict = Dict(term.variable => term.coefficient for term in geq_constraint_func.terms)
     @test geq_terms_dict[geq_art_var] == +1.0  # Should be +1.0 for ≥ constraints
@@ -95,11 +98,11 @@ function test_setup_reformulation_with_artificial_variables()
     conv_leq_ref = JuMP.index(conv_leq_constraint)
     conv_geq_ref = JuMP.index(conv_geq_constraint)
     
-    @test haskey(context.leq_art_vars, conv_leq_ref)
-    @test haskey(context.geq_art_vars, conv_geq_ref)
+    @test haskey(master_provider.leq_art_vars, conv_leq_ref)
+    @test haskey(master_provider.geq_art_vars, conv_geq_ref)
     
-    conv_leq_art_var = context.leq_art_vars[conv_leq_ref]
-    conv_geq_art_var = context.geq_art_vars[conv_geq_ref]
+    conv_leq_art_var = master_provider.leq_art_vars[conv_leq_ref]
+    conv_geq_art_var = master_provider.geq_art_vars[conv_geq_ref]
     
     @test obj_terms_dict[conv_leq_art_var] == 10000.0  # 10x higher cost
     @test obj_terms_dict[conv_geq_art_var] == 10000.0  # 10x higher cost
