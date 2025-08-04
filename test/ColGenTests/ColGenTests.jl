@@ -17,6 +17,7 @@ include("test_utils.jl")
 include("dw_colgen.jl")
 include("dw_colgen_iteration.jl")
 include("optimizer_validation.jl")
+include("wolsey_integration.jl")
 
 dw_annotation(::Val{:assignment}, machine, job) = RK.dantzig_wolfe_subproblem(machine);
 dw_annotation(::Val{:coverage}, job) = RK.dantzig_wolfe_master();
@@ -33,6 +34,9 @@ function run()
     
     # Run optimizer validation tests
     test_unit_optimizer_validation()
+    
+    # Run Wolsey integration test
+    test_wolsey_integration()
     
     # Run column generation example
     machines = 1:3;
