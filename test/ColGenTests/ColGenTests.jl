@@ -1,6 +1,6 @@
 module ColGenTests
 
-using JuMP, MathOptInterface, GLPK
+using JuMP, MathOptInterface, HiGHS
 # =====================================================================
 # Example: Problem-specific Model and Solver Invocation
 # =====================================================================

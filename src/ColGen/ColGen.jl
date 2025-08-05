@@ -36,7 +36,6 @@ function run_column_generation(reformulation)
     end
     
     context = DantzigWolfeColGenImpl(reformulation)
-    @show get_reform(context).subproblems
     ip_primal_sol = nothing
     run!(context, ip_primal_sol)
 end

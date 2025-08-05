@@ -117,8 +117,12 @@ struct ReducedCosts
     values::Dict{Any,Dict{MOI.VariableIndex,Float64}}
 end
 
+_constr_sign(::Type{MOI.ConstraintIndex{F, S}}) where {F,S <: MOI.GreaterThan{Float64}} = 1.0
+_constr_sign(::Type{MOI.ConstraintIndex{F, S}}) where {F,S <: MOI.LessThan{Float64}} = -1.0
+_constr_sign(::Type{MOI.ConstraintIndex{F, S}}) where {F,S <: MOI.EqualTo{Float64}} = 1.0
 
 function compute_reduced_costs!(context::DantzigWolfeColGenImpl, phase::MixedPhase1and2, mast_dual_sol::MasterDualSolution)
+    obj_sign = is_minimization(context) ? 1.0 : -1.0
     reduced_costs_dict = Dict{Any,Dict{MOI.VariableIndex,Float64}}()
 
     for (sp_id, pricing_sp) in get_pricing_subprobs(context)
@@ -138,13 +142,13 @@ function compute_reduced_costs!(context::DantzigWolfeColGenImpl, phase::MixedPha
                 # Direct lookup in type-stable dual solution structure
                 if haskey(mast_dual_sol.constraint_duals, constraint_type)
                     constraint_dict = mast_dual_sol.constraint_duals[constraint_type]
+                    constr_sign = _constr_sign(constraint_type)
                     if haskey(constraint_dict, constraint_value)
                         dual_value = constraint_dict[constraint_value]
-                        dual_contribution -= coeff * dual_value
+                        dual_contribution += obj_sign * constr_sign * coeff * dual_value
                     end
                 end
             end
-
             sp_reduced_costs[var_index] = original_cost - dual_contribution
         end
 

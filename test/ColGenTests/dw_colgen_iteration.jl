@@ -19,7 +19,6 @@ function test_optimize_master_lp_primal_integration()
     )
 
     context = MK.ColGen.DantzigWolfeColGenImpl(reformulation)
-    MK.ColGen.setup_reformulation!(context, MK.ColGen.MixedPhase1and2())
 
     # Test that optimization returns proper MasterSolution with dual solution
     master_solution = MK.ColGen.optimize_master_lp_problem!(MK.ColGen.get_master(context), context)
@@ -42,8 +41,6 @@ function test_optimize_master_lp_dual_integration()
     @constraint(master_model, cstr2, x + y == 5)
     @objective(master_model, Min, x + 3y)
 
-    #
-
     # Create minimal reformulation 
     reformulation = RK.DantzigWolfeReformulation(
         master_model,
@@ -53,7 +50,6 @@ function test_optimize_master_lp_dual_integration()
     )
 
     context = MK.ColGen.DantzigWolfeColGenImpl(reformulation)
-    MK.ColGen.setup_reformulation!(context, MK.ColGen.MixedPhase1and2())
 
     # Test that optimization returns proper MasterSolution with dual solution
     master_solution = MK.ColGen.optimize_master_lp_problem!(MK.ColGen.get_master(context), context)
@@ -72,6 +68,7 @@ end
 
 function test_reduced_costs_computation_basic()
     # Test scenario:
+    # - Minimization problem
     # - 1 subproblem with 5 variables
     # - 3 master constraints (≥, ≤, ==)
     # - Known coefficient matrix A and costs c
@@ -90,9 +87,16 @@ function test_reduced_costs_computation_basic()
         0.5  0.0  1.0  2.0  1.0;   # constraint 2 (≤)
         2.0  1.0  0.5  0.0  1.5    # constraint 3 (==)
     ]
+
+    # Coefficient matrix after considering constraint senses.
+    A2 = [
+        1.0  2.0  0.0  1.5  0.5;       # constraint 1 (≥)
+        -0.5  -0.0  -1.0  -2.0 -1.0;  # constraint 2 (≤)
+        2.0  1.0  0.5  0.0  1.5        # constraint 3 (==)
+    ]
     
     # Expected reduced costs = c - y^T × A
-    expected_reduced_costs = original_costs - (dual_values' * A)'
+    expected_reduced_costs = original_costs - A2' * dual_values
     
     # Create mock MOI variable indices
     var_indices = [MOI.VariableIndex(i) for i in 1:5]
@@ -137,6 +141,7 @@ function test_reduced_costs_computation_basic()
     
     # Create minimal reformulation and context with proper subproblem extensions
     master_model = Model(GLPK.Optimizer)
+    @objective(master_model, Min, 0)
     subproblem_model = Model()
     
     # Add the required extensions to the subproblem model
@@ -343,8 +348,8 @@ function test_compute_master_constraint_membership_basic()
     reformulation = RK.DantzigWolfeReformulation(
         master_model,
         Dict(1 => Model()),
-        Dict(1 => conv_lb_constraint),  # convexity_constraints_lb
-        Dict(1 => conv_ub_constraint)   # convexity_constraints_ub
+        Dict(1 => JuMP.index(conv_lb_constraint)),  # convexity_constraints_lb
+        Dict(1 => JuMP.index(conv_ub_constraint))   # convexity_constraints_ub
     )
     
     # Create PricingPrimalMoiSolution with known variable values
