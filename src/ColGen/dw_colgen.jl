@@ -48,10 +48,10 @@ struct DantzigWolfeColGenImpl{M, P}
     end
 end
 
-struct Master{MoiModel, C}
+struct Master{MoiModel, Cu, Cl}
     moi_master::MoiModel
-    convexity_constraints_ub::C
-    convexity_constraints_lb::C
+    convexity_constraints_ub::Cu
+    convexity_constraints_lb::Cl
     eq_art_vars::Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.EqualTo{Float64}}, Tuple{MOI.VariableIndex, MOI.VariableIndex}}
     leq_art_vars::Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}}, MOI.VariableIndex}
     geq_art_vars::Dict{MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.GreaterThan{Float64}}, MOI.VariableIndex}
@@ -68,8 +68,12 @@ get_pricing_subprobs(impl::DantzigWolfeColGenImpl) = get_pricing_subprobs(impl.p
 # Provider interface methods for ReformulationMasterProvider
 get_master(provider::ReformulationMasterProvider) = Master(
     JuMP.backend(RK.master(provider.reformulation)),
-    provider.reformulation.convexity_constraints_ub,
-    provider.reformulation.convexity_constraints_lb,
+    Dict{Int64, MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}}}(
+        sp_id => JuMP.index(jump_ref) for (sp_id, jump_ref) in provider.reformulation.convexity_constraints_ub
+    ),
+    Dict{Int64, MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.GreaterThan{Float64}}}(
+        sp_id => JuMP.index(jump_ref) for (sp_id, jump_ref) in provider.reformulation.convexity_constraints_lb
+    ),
     provider.eq_art_vars,
     provider.leq_art_vars,
     provider.geq_art_vars

@@ -140,7 +140,7 @@ function compute_reduced_costs!(context::DantzigWolfeColGenImpl, phase::MixedPha
                     constraint_dict = mast_dual_sol.constraint_duals[constraint_type]
                     if haskey(constraint_dict, constraint_value)
                         dual_value = constraint_dict[constraint_value]
-                        dual_contribution += coeff * dual_value
+                        dual_contribution -= coeff * dual_value
                     end
                 end
             end
@@ -270,8 +270,7 @@ function _convexity_contrib(impl::DantzigWolfeColGenImpl, sep_mast_dual_sol::Mas
     convexity_contribution = 0.0
     
     # Process convexity upper bound constraints (≤)
-    for (sp_id, conv_constraint_ref) in master.convexity_constraints_ub
-        constraint_index = JuMP.index(conv_constraint_ref)
+    for (sp_id, constraint_index) in master.convexity_constraints_ub
         constraint_type = typeof(constraint_index)
         constraint_value = constraint_index.value
         constraint_set = MOI.get(master.moi_master, MOI.ConstraintSet(), constraint_index)
@@ -287,8 +286,7 @@ function _convexity_contrib(impl::DantzigWolfeColGenImpl, sep_mast_dual_sol::Mas
     end
     
     # Process convexity lower bound constraints (≥)
-    for (sp_id, conv_constraint_ref) in master.convexity_constraints_lb
-        constraint_index = JuMP.index(conv_constraint_ref)
+    for (sp_id, constraint_index) in master.convexity_constraints_lb
         constraint_type = typeof(constraint_index)
         constraint_value = constraint_index.value
         constraint_set = MOI.get(master.moi_master, MOI.ConstraintSet(), constraint_index)
@@ -318,13 +316,13 @@ function _subprob_contrib(impl::DantzigWolfeColGenImpl, sps_db::Dict{Int64,Float
         # Determine multiplicity based on reduced cost sign
         if reduced_cost < 0  # Improving reduced cost: use upper multiplicity
             if haskey(master.convexity_constraints_ub, sp_id)
-                constraint_index = JuMP.index(master.convexity_constraints_ub[sp_id])
+                constraint_index = master.convexity_constraints_ub[sp_id]
                 constraint_set = MOI.get(master.moi_master, MOI.ConstraintSet(), constraint_index)
                 multiplicity = constraint_set.upper
             end
         else  # Non-improving reduced cost: use lower multiplicity
             if haskey(master.convexity_constraints_lb, sp_id)
-                constraint_index = JuMP.index(master.convexity_constraints_lb[sp_id])
+                constraint_index = master.convexity_constraints_lb[sp_id]
                 constraint_set = MOI.get(master.moi_master, MOI.ConstraintSet(), constraint_index)
                 multiplicity = constraint_set.lower
             end
@@ -377,11 +375,11 @@ function _compute_master_constraint_membership(
     
     # Add convexity constraint membership (coefficient = 1.0)
     if haskey(master.convexity_constraints_ub, sp_id)
-        conv_constraint_ref = JuMP.index(master.convexity_constraints_ub[sp_id])
+        conv_constraint_ref = master.convexity_constraints_ub[sp_id]
         constraint_coeffs[conv_constraint_ref] = 1.0
     end
     if haskey(master.convexity_constraints_lb, sp_id)
-        conv_constraint_ref = JuMP.index(master.convexity_constraints_lb[sp_id])
+        conv_constraint_ref = master.convexity_constraints_lb[sp_id]
         constraint_coeffs[conv_constraint_ref] = 1.0
     end
     
