@@ -382,6 +382,115 @@ function test_master_dual_solution_variable_bounds_jump_model()
     @test contains(output, "└ cost = 75.0")
 end
 
+function test_master_dual_solution_recompute_cost()
+    # Test basic cost recomputation with various constraint types
+    moi_model = MOI.Utilities.Model{Float64}()
+    
+    # Add variables
+    x = MOI.add_variable(moi_model)
+    y = MOI.add_variable(moi_model)
+    
+    # Add different types of constraints with known RHS values
+    eq_constraint = MOI.add_constraint(moi_model, MOI.ScalarAffineFunction([MOI.ScalarAffineTerm(1.0, x), MOI.ScalarAffineTerm(1.0, y)], 0.0), MOI.EqualTo(10.0))
+    leq_constraint = MOI.add_constraint(moi_model, MOI.ScalarAffineFunction([MOI.ScalarAffineTerm(2.0, x)], 0.0), MOI.LessThan(20.0))
+    geq_constraint = MOI.add_constraint(moi_model, MOI.ScalarAffineFunction([MOI.ScalarAffineTerm(1.0, y)], 0.0), MOI.GreaterThan(5.0))
+    
+    # Create constraint_duals with known dual values
+    constraint_duals = Dict{Type{<:MOI.ConstraintIndex},Dict{Int64,Float64}}()
+    constraint_duals[typeof(eq_constraint)] = Dict{Int64,Float64}(eq_constraint.value => 2.0)    # dual = 2.0, RHS = 10.0 -> contribution = 20.0
+    constraint_duals[typeof(leq_constraint)] = Dict{Int64,Float64}(leq_constraint.value => 1.5)  # dual = 1.5, RHS = 20.0 -> contribution = 30.0
+    constraint_duals[typeof(geq_constraint)] = Dict{Int64,Float64}(geq_constraint.value => 3.0)  # dual = 3.0, RHS = 5.0 -> contribution = 15.0
+    
+    # Expected total cost = 20.0 + 30.0 + 15.0 = 65.0
+    solution = MK.ColGen.MasterDualSolution(999.999, constraint_duals)  # Use different obj_value to verify independent computation
+    
+    recomputed_cost = MK.ColGen.recompute_cost(solution, moi_model)
+    
+    @test recomputed_cost ≈ 65.0 atol=1e-6
+end
+
+function test_master_dual_solution_recompute_cost_empty()
+    # Test with empty dual solution
+    moi_model = MOI.Utilities.Model{Float64}()
+    
+    empty_constraint_duals = Dict{Type{<:MOI.ConstraintIndex},Dict{Int64,Float64}}()
+    empty_solution = MK.ColGen.MasterDualSolution(123.45, empty_constraint_duals)
+    
+    recomputed_cost = MK.ColGen.recompute_cost(empty_solution, moi_model)
+    
+    @test recomputed_cost ≈ 0.0 atol=1e-6
+end
+
+function test_master_dual_solution_recompute_cost_with_invalid_constraints()
+    # Test handling of invalid/non-existent constraints
+    moi_model = MOI.Utilities.Model{Float64}()
+    
+    # Add one valid constraint
+    x = MOI.add_variable(moi_model)
+    valid_constraint = MOI.add_constraint(moi_model, MOI.ScalarAffineFunction([MOI.ScalarAffineTerm(1.0, x)], 0.0), MOI.EqualTo(5.0))
+    
+    # Create constraint_duals with valid and invalid constraint indices
+    constraint_duals = Dict{Type{<:MOI.ConstraintIndex},Dict{Int64,Float64}}()
+    valid_type = typeof(valid_constraint)
+    
+    constraint_duals[valid_type] = Dict{Int64,Float64}(
+        valid_constraint.value => 2.0,  # Valid: dual = 2.0, RHS = 5.0 -> contribution = 10.0
+        999 => 10.0  # Invalid index - should be skipped
+    )
+    
+    solution = MK.ColGen.MasterDualSolution(0.0, constraint_duals)
+    
+    recomputed_cost = MK.ColGen.recompute_cost(solution, moi_model)
+    
+    # Should only include the valid constraint: 2.0 * 5.0 = 10.0
+    @test recomputed_cost ≈ 10.0 atol=1e-6
+end
+
+function test_master_dual_solution_recompute_cost_variable_bounds()
+    # Test with variable bounds constraints
+    moi_model = MOI.Utilities.Model{Float64}()
+    
+    # Add variables with bounds
+    x = MOI.add_variable(moi_model)
+    y = MOI.add_variable(moi_model)
+    
+    # Add variable bounds
+    lb_x = MOI.add_constraint(moi_model, x, MOI.GreaterThan(0.0))
+    ub_y = MOI.add_constraint(moi_model, y, MOI.LessThan(100.0))
+    eq_z = MOI.add_variable(moi_model)
+    eq_bound = MOI.add_constraint(moi_model, eq_z, MOI.EqualTo(50.0))
+    
+    # Create constraint_duals for variable bounds
+    constraint_duals = Dict{Type{<:MOI.ConstraintIndex},Dict{Int64,Float64}}()
+    constraint_duals[typeof(lb_x)] = Dict{Int64,Float64}(lb_x.value => 1.0)      # dual = 1.0, RHS = 0.0 -> contribution = 0.0
+    constraint_duals[typeof(ub_y)] = Dict{Int64,Float64}(ub_y.value => 2.0)      # dual = 2.0, RHS = 100.0 -> contribution = 200.0
+    constraint_duals[typeof(eq_bound)] = Dict{Int64,Float64}(eq_bound.value => 0.5)  # dual = 0.5, RHS = 50.0 -> contribution = 25.0
+    
+    # Expected total cost = 0.0 + 200.0 + 25.0 = 225.0
+    solution = MK.ColGen.MasterDualSolution(0.0, constraint_duals)
+    
+    recomputed_cost = MK.ColGen.recompute_cost(solution, moi_model)
+    
+    @test recomputed_cost ≈ 225.0 atol=1e-6
+end
+
+function test_master_dual_solution_recompute_cost_zero_duals()
+    # Test with zero dual values
+    moi_model = MOI.Utilities.Model{Float64}()
+    
+    x = MOI.add_variable(moi_model)
+    constraint = MOI.add_constraint(moi_model, MOI.ScalarAffineFunction([MOI.ScalarAffineTerm(1.0, x)], 0.0), MOI.LessThan(15.0))
+    
+    constraint_duals = Dict{Type{<:MOI.ConstraintIndex},Dict{Int64,Float64}}()
+    constraint_duals[typeof(constraint)] = Dict{Int64,Float64}(constraint.value => 0.0)
+    
+    solution = MK.ColGen.MasterDualSolution(42.0, constraint_duals)
+    
+    recomputed_cost = MK.ColGen.recompute_cost(solution, moi_model)
+    
+    @test recomputed_cost ≈ 0.0 atol=1e-6
+end
+
 function test_unit_master_dual_solution_printing()
     @testset "[master_dual_solution] printing with named constraints" begin
         test_master_dual_solution_printing_with_named_constraints()
@@ -421,5 +530,25 @@ function test_unit_master_dual_solution_printing()
     
     @testset "[master_dual_solution] variable bounds with JuMP model" begin
         test_master_dual_solution_variable_bounds_jump_model()
+    end
+    
+    @testset "[master_dual_solution] recompute cost basic" begin
+        test_master_dual_solution_recompute_cost()
+    end
+    
+    @testset "[master_dual_solution] recompute cost empty" begin
+        test_master_dual_solution_recompute_cost_empty()
+    end
+    
+    @testset "[master_dual_solution] recompute cost with invalid constraints" begin
+        test_master_dual_solution_recompute_cost_with_invalid_constraints()
+    end
+    
+    @testset "[master_dual_solution] recompute cost variable bounds" begin
+        test_master_dual_solution_recompute_cost_variable_bounds()
+    end
+    
+    @testset "[master_dual_solution] recompute cost zero duals" begin
+        test_master_dual_solution_recompute_cost_zero_duals()
     end
 end
