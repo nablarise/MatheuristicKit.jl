@@ -77,6 +77,162 @@ struct MasterDualSolution
     constraint_duals::Dict{Type{<:MOI.ConstraintIndex},Dict{Int64,Float64}}
 end
 
+function Base.show(io::IO, sol::MasterDualSolution, model)
+    println(io, "Dual solution:")
+    
+    # Collect all constraints with their types and sort them
+    all_constraints = []
+    for (constraint_type, constraint_dict) in sol.constraint_duals
+        for (index_value, dual_value) in constraint_dict
+            # Reconstruct the MOI.ConstraintIndex from type and value
+            constraint_index = constraint_type(index_value)
+            push!(all_constraints, (constraint_type, constraint_index, dual_value))
+        end
+    end
+    
+    # Sort by constraint type name, then by index value for consistency
+    sort!(all_constraints, by = x -> (string(x[1]), x[2].value))
+    
+    for (i, (constraint_type, constraint_index, dual_value)) in enumerate(all_constraints)
+        # Get constraint name if it exists, with special handling for variable bounds
+        constraint_name = try
+            # Check if this is a variable bound constraint (function is MOI.VariableIndex)
+            constraint_func = MOI.get(model, MOI.ConstraintFunction(), constraint_index)
+            if constraint_func isa MOI.VariableIndex
+                # This is a variable bound constraint
+                var_index = constraint_func
+                var_name = MOI.get(model, MOI.VariableName(), var_index)
+                if isempty(var_name)
+                    var_name = "var[$(var_index.value)]"
+                end
+                
+                # Get the constraint set to determine bound type and value
+                constraint_set = MOI.get(model, MOI.ConstraintSet(), constraint_index)
+                if constraint_set isa MOI.GreaterThan
+                    "$(var_name) >= $(constraint_set.lower)"
+                elseif constraint_set isa MOI.LessThan
+                    "$(var_name) <= $(constraint_set.upper)"
+                elseif constraint_set isa MOI.EqualTo
+                    "$(var_name) == $(constraint_set.value)"
+                else
+                    # Other bound types (like Interval, etc.)
+                    "$(var_name) in $(constraint_set)"
+                end
+            else
+                # Regular constraint - try to get its name
+                name = MOI.get(model, MOI.ConstraintName(), constraint_index)
+                if isempty(name)
+                    "constr[$(constraint_type)][$(constraint_index.value)]"
+                else
+                    name
+                end
+            end
+        catch
+            # Fallback if constraint doesn't exist in model
+            "constr[$(constraint_type)][$(constraint_index.value)]"
+        end
+        
+        # Use appropriate connector: | for middle items, └ for last item
+        connector = i == length(all_constraints) ? "└" : "|"
+        println(io, "$connector $constraint_name: $dual_value")
+    end
+    
+    print(io, "└ cost = $(sol.obj_value)")
+end
+
+function Base.show(io::IO, sol::MasterDualSolution, jump_model::JuMP.Model)
+    println(io, "Dual solution:")
+    
+    # Collect all constraints with their types and sort them
+    all_constraints = []
+    for (constraint_type, constraint_dict) in sol.constraint_duals
+        for (index_value, dual_value) in constraint_dict
+            # Reconstruct the MOI.ConstraintIndex from type and value
+            constraint_index = constraint_type(index_value)
+            push!(all_constraints, (constraint_type, constraint_index, dual_value))
+        end
+    end
+    
+    # Sort by constraint type name, then by index value for consistency
+    sort!(all_constraints, by = x -> (string(x[1]), x[2].value))
+    
+    for (i, (constraint_type, constraint_index, dual_value)) in enumerate(all_constraints)
+        # Get constraint name from JuMP model if it exists, with special handling for variable bounds
+        constraint_name = try
+            # Get MOI backend to check constraint function type
+            moi_backend = JuMP.backend(jump_model)
+            constraint_func = MOI.get(moi_backend, MOI.ConstraintFunction(), constraint_index)
+            
+            if constraint_func isa MOI.VariableIndex
+                # This is a variable bound constraint
+                var_index = constraint_func
+                # Convert to JuMP variable reference to get name
+                var_ref = JuMP.VariableRef(jump_model, var_index)
+                var_name = JuMP.name(var_ref)
+                if isempty(var_name)
+                    var_name = "var[$(var_index.value)]"
+                end
+                
+                # Get the constraint set to determine bound type and value
+                constraint_set = MOI.get(moi_backend, MOI.ConstraintSet(), constraint_index)
+                if constraint_set isa MOI.GreaterThan
+                    "$(var_name) >= $(constraint_set.lower)"
+                elseif constraint_set isa MOI.LessThan
+                    "$(var_name) <= $(constraint_set.upper)"
+                elseif constraint_set isa MOI.EqualTo
+                    "$(var_name) == $(constraint_set.value)"
+                else
+                    # Other bound types (like Interval, etc.)
+                    "$(var_name) in $(constraint_set)"
+                end
+            else
+                # Regular constraint - try to get JuMP constraint name
+                constraint_ref = JuMP.constraint_ref_with_index(jump_model, constraint_index)
+                jump_name = JuMP.name(constraint_ref)
+                if isempty(jump_name)
+                    "constr[$(constraint_type)][$(constraint_index.value)]"
+                else
+                    jump_name
+                end
+            end
+        catch
+            # Fallback if constraint doesn't exist in JuMP model
+            "constr[$(constraint_type)][$(constraint_index.value)]"
+        end
+        
+        # Use appropriate connector: | for middle items, └ for last item
+        connector = i == length(all_constraints) ? "└" : "|"
+        println(io, "$connector $constraint_name: $dual_value")
+    end
+    
+    print(io, "└ cost = $(sol.obj_value)")
+end
+
+function Base.show(io::IO, sol::MasterDualSolution)
+    println(io, "Dual solution:")
+    
+    # Collect all constraints with their types and sort them
+    all_constraints = []
+    for (constraint_type, constraint_dict) in sol.constraint_duals
+        for (index_value, dual_value) in constraint_dict
+            push!(all_constraints, (constraint_type, index_value, dual_value))
+        end
+    end
+    
+    # Sort by constraint type name, then by index value for consistency
+    sort!(all_constraints, by = x -> (string(x[1]), x[2]))
+    
+    for (i, (constraint_type, index_value, dual_value)) in enumerate(all_constraints)
+        constraint_name = "constr[$(constraint_type)][$(index_value)]"
+        
+        # Use appropriate connector: | for middle items, └ for last item
+        connector = i == length(all_constraints) ? "└" : "|"
+        println(io, "$connector $constraint_name: $dual_value")
+    end
+    
+    print(io, "└ cost = $(sol.obj_value)")
+end
+
 struct MasterSolution
     moi_termination_status::MOI.TerminationStatusCode
     moi_primal_status::MOI.ResultStatusCode
@@ -251,7 +407,7 @@ compute_sp_init_pb(impl::DantzigWolfeColGenImpl, _) = is_minimization(impl) ? In
 struct DefaultPricingStrategy{PricingSubproblemIterator}
     pricing_sps::PricingSubproblemIterator
 end
-get_pricing_strategy(impl::DantzigWolfeColGenImpl, ::MixedPhase1and2) = DefaultPricingStrategy(get_pricing_subprobs(impl))
+get_pricing_strategy(impl::DantzigWolfeColGenImpl, ::MixedPhase1and2) = DefaultPricingStrategy(sort(collect(get_pricing_subprobs(impl)), by=p -> first(p)))
 pricing_strategy_iterate(strategy::DefaultPricingStrategy) = iterate(strategy.pricing_sps)
 pricing_strategy_iterate(strategy::DefaultPricingStrategy, state) = iterate(strategy.pricing_sps, state)
 
@@ -317,7 +473,6 @@ function optimize_pricing_problem!(context::DantzigWolfeColGenImpl, sp_id::Any, 
     # Determine if this solution has an improving reduced cost
     # For minimization: negative reduced cost is improving
     # For maximization: positive reduced cost is improving
-    @show true_reduced_cost
     is_improving = if is_minimization(context)
         true_reduced_cost < -1e-6
     else
@@ -425,7 +580,6 @@ function _subprob_contrib(impl::DantzigWolfeColGenImpl, sps_db::Dict{Int64,Float
     subprob_contribution = 0.0
     
     for (sp_id, reduced_cost) in sps_db
-       # println("********** sp_id = $sp_id")
         multiplicity = 0.0
         
         # Determine multiplicity based on reduced cost sign
@@ -442,9 +596,6 @@ function _subprob_contrib(impl::DantzigWolfeColGenImpl, sps_db::Dict{Int64,Float
                 multiplicity = constraint_set.lower
             end
         end
-
-        #println(" --- reduced_cost = $reduced_cost")
-        #println(" --- multiplicity = $(multiplicity)")
         
         subprob_contribution += reduced_cost * multiplicity
     end
@@ -453,15 +604,13 @@ function _subprob_contrib(impl::DantzigWolfeColGenImpl, sps_db::Dict{Int64,Float
 end
 
 function compute_dual_bound(impl::DantzigWolfeColGenImpl, ::MixedPhase1and2, sps_db::Dict{Int64,Float64}, mast_dual_sol::MasterDualSolution)
-    master_lp_obj_val = mast_dual_sol.obj_value - _convexity_contrib(impl, mast_dual_sol)
+    master_lp_obj_val = mast_dual_sol.obj_value #- _convexity_contrib(impl, mast_dual_sol)
     
     sp_contrib = _subprob_contrib(impl, sps_db)
 
     # additional master variables are missing.
 
-    @show mast_dual_sol.obj_value
-    @show _convexity_contrib(impl, mast_dual_sol)
-    @show sp_contrib
+
     
     return master_lp_obj_val + sp_contrib 
 end
