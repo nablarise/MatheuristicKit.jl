@@ -5,6 +5,73 @@ struct MasterPrimalSolution
     variable_values::Dict{MOI.VariableIndex,Float64}
 end
 
+function Base.show(io::IO, sol::MasterPrimalSolution, model)
+    println(io, "Primal solution:")
+    
+    # Sort variables by index for consistent output
+    sorted_vars = sort(collect(sol.variable_values), by = x -> x[1].value)
+    
+    for (i, (var_index, value)) in enumerate(sorted_vars)
+        # Get variable name if it exists
+        var_name = MOI.get(model, MOI.VariableName(), var_index)
+        if isempty(var_name)
+            var_name = "_[$(var_index.value)]"
+        end
+        
+        # Use appropriate connector: | for middle items, └ for last item
+        connector = i == length(sorted_vars) ? "└" : "|"
+        println(io, "$connector $var_name: $value")
+    end
+    
+    print(io, "└ cost = $(sol.obj_value)")
+end
+
+function Base.show(io::IO, sol::MasterPrimalSolution, jump_model::JuMP.Model)
+    println(io, "Primal solution:")
+    
+    # Sort variables by index for consistent output
+    sorted_vars = sort(collect(sol.variable_values), by = x -> x[1].value)
+    
+    for (i, (var_index, value)) in enumerate(sorted_vars)
+        # Convert MOI.VariableIndex to JuMP.VariableRef to access JuMP variable names
+        var_name = try
+            var_ref = JuMP.VariableRef(jump_model, var_index)
+            jump_name = JuMP.name(var_ref)
+            if isempty(jump_name)
+                "_[$(var_index.value)]"
+            else
+                jump_name
+            end
+        catch
+            # Fallback if variable doesn't exist in JuMP model
+            "_[$(var_index.value)]"
+        end
+        
+        # Use appropriate connector: | for middle items, └ for last item
+        connector = i == length(sorted_vars) ? "└" : "|"
+        println(io, "$connector $var_name: $value")
+    end
+    
+    print(io, "└ cost = $(sol.obj_value)")
+end
+
+function Base.show(io::IO, sol::MasterPrimalSolution)
+    println(io, "Primal solution:")
+    
+    # Sort variables by index for consistent output
+    sorted_vars = sort(collect(sol.variable_values), by = x -> x[1].value)
+    
+    for (i, (var_index, value)) in enumerate(sorted_vars)
+        var_name = "_[$(var_index.value)]"
+        
+        # Use appropriate connector: | for middle items, └ for last item
+        connector = i == length(sorted_vars) ? "└" : "|"
+        println(io, "$connector $var_name: $value")
+    end
+    
+    print(io, "└ cost = $(sol.obj_value)")
+end
+
 struct MasterDualSolution
     obj_value::Float64
     constraint_duals::Dict{Type{<:MOI.ConstraintIndex},Dict{Int64,Float64}}
