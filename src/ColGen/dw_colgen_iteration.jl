@@ -204,10 +204,9 @@ get_primal_sols(sol::PricingSolution) = sol.primal_sols
 get_primal_bound(sol::PricingSolution) = sol.primal_bound
 get_dual_bound(sol::PricingSolution) = sol.dual_bound
 
-
 struct PricingPrimalMoiSolution
     subproblem_id::Any  # Subproblem that generated this solution
-    obj_value::Float64  # This is the reduced cost
+    obj_value::Float64  # The true reduced cost including convexity constraint contribution
     variable_values::Dict{MOI.VariableIndex,Float64}
     is_improving::Bool  # Whether this solution has an improving reduced cost
 end
@@ -236,24 +235,31 @@ struct SubproblemMoiOptimizer end
 # TODO: implement pricing callback.
 get_pricing_subprob_optimizer(::ExactStage, ::PricingSubproblem) = SubproblemMoiOptimizer()
 
-function optimize_pricing_problem!(context::DantzigWolfeColGenImpl, sp_id::Any, pricing_sp::PricingSubproblem, ::SubproblemMoiOptimizer, ::MasterDualSolution, stab_changes_mast_dual_sol)
+function optimize_pricing_problem!(context::DantzigWolfeColGenImpl, sp_id::Any, pricing_sp::PricingSubproblem, ::SubproblemMoiOptimizer, mast_dual_sol::MasterDualSolution, stab_changes_mast_dual_sol)
     MOI.optimize!(moi_pricing_sp(pricing_sp))
 
-    # Get objective value
-    primal_obj_value = MOI.get(moi_pricing_sp(pricing_sp), MOI.ObjectiveValue())
+    # Get objective value from subproblem (includes coupling constraint reduced costs)
+    subproblem_obj_value = MOI.get(moi_pricing_sp(pricing_sp), MOI.ObjectiveValue())
+    
+    # Compute convexity constraint contribution to get true reduced cost
+    convexity_contrib = _subproblem_convexity_contrib(context, sp_id, mast_dual_sol)
+    
+    # True reduced cost = subproblem objective - convexity contribution
+    true_reduced_cost = subproblem_obj_value - convexity_contrib
 
     # Determine if this solution has an improving reduced cost
     # For minimization: negative reduced cost is improving
     # For maximization: positive reduced cost is improving
+    @show true_reduced_cost
     is_improving = if is_minimization(context)
-        primal_obj_value < 0
+        true_reduced_cost < -1e-6
     else
-        primal_obj_value > 0
+        true_reduced_cost > 1e-6
     end
 
     # Get variable primal values
     variable_values = _populate_variable_values(moi_pricing_sp(pricing_sp))
-    primal_sol = PricingPrimalMoiSolution(sp_id, primal_obj_value, variable_values, is_improving)
+    primal_sol = PricingPrimalMoiSolution(sp_id, true_reduced_cost, variable_values, is_improving)
 
     moi_termination_status = MOI.get(moi_pricing_sp(pricing_sp), MOI.TerminationStatus())
 
@@ -263,10 +269,47 @@ function optimize_pricing_problem!(context::DantzigWolfeColGenImpl, sp_id::Any, 
     return PricingSolution(
         is_infeasible,
         is_unbounded,
-        primal_obj_value,
-        primal_obj_value, # exact phase so primal bound == dual bound
+        true_reduced_cost,
+        true_reduced_cost, # exact phase so primal bound == dual bound
         [primal_sol]
     )
+end
+
+function _subproblem_convexity_contrib(impl::DantzigWolfeColGenImpl, sp_id::Any, mast_dual_sol::MasterDualSolution)
+    master = get_master(impl)
+    convexity_contribution = 0.0
+    
+    # Process convexity upper bound constraint (≤) for this subproblem
+    if haskey(master.convexity_constraints_ub, sp_id)
+        constraint_index = master.convexity_constraints_ub[sp_id]
+        constraint_type = typeof(constraint_index)
+        constraint_value = constraint_index.value
+        
+        if haskey(mast_dual_sol.constraint_duals, constraint_type)
+            constraint_dict = mast_dual_sol.constraint_duals[constraint_type]
+            if haskey(constraint_dict, constraint_value)
+                dual_value = constraint_dict[constraint_value]
+                convexity_contribution += dual_value
+            end
+        end
+    end
+    
+    # Process convexity lower bound constraint (≥) for this subproblem
+    if haskey(master.convexity_constraints_lb, sp_id)
+        constraint_index = master.convexity_constraints_lb[sp_id]
+        constraint_type = typeof(constraint_index)
+        constraint_value = constraint_index.value
+        
+        if haskey(mast_dual_sol.constraint_duals, constraint_type)
+            constraint_dict = mast_dual_sol.constraint_duals[constraint_type]
+            if haskey(constraint_dict, constraint_value)
+                dual_value = constraint_dict[constraint_value]
+                convexity_contribution += dual_value
+            end
+        end
+    end
+    
+    return convexity_contribution
 end
 
 function _convexity_contrib(impl::DantzigWolfeColGenImpl, sep_mast_dual_sol::MasterDualSolution)
@@ -315,6 +358,7 @@ function _subprob_contrib(impl::DantzigWolfeColGenImpl, sps_db::Dict{Int64,Float
     subprob_contribution = 0.0
     
     for (sp_id, reduced_cost) in sps_db
+       # println("********** sp_id = $sp_id")
         multiplicity = 0.0
         
         # Determine multiplicity based on reduced cost sign
@@ -331,6 +375,9 @@ function _subprob_contrib(impl::DantzigWolfeColGenImpl, sps_db::Dict{Int64,Float
                 multiplicity = constraint_set.lower
             end
         end
+
+        #println(" --- reduced_cost = $reduced_cost")
+        #println(" --- multiplicity = $(multiplicity)")
         
         subprob_contribution += reduced_cost * multiplicity
     end
@@ -342,8 +389,12 @@ function compute_dual_bound(impl::DantzigWolfeColGenImpl, ::MixedPhase1and2, sps
     master_lp_obj_val = mast_dual_sol.obj_value - _convexity_contrib(impl, mast_dual_sol)
     
     sp_contrib = _subprob_contrib(impl, sps_db)
-    
+
     # additional master variables are missing.
+
+    @show mast_dual_sol.obj_value
+    @show _convexity_contrib(impl, mast_dual_sol)
+    @show sp_contrib
     
     return master_lp_obj_val + sp_contrib 
 end

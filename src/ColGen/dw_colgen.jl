@@ -114,7 +114,7 @@ struct MixedPhase1and2
     artificial_var_cost::Float64
     convexity_artificial_var_cost::Float64
     
-    function MixedPhase1and2(artificial_var_cost::Float64 = 1e6, convexity_artificial_var_cost::Float64 = 10.0 * artificial_var_cost)
+    function MixedPhase1and2(artificial_var_cost::Float64 = 10000.0, convexity_artificial_var_cost::Float64 = 10000.0)
         return new(artificial_var_cost, convexity_artificial_var_cost)
     end
 end
@@ -248,7 +248,7 @@ function new_iteration_output(::Type{<:ColGenIterationOutput},
     master_ip_primal_sol,
     master_lp_dual_sol,
 )
-    return ColGenIterationOutput(mlp, db, nb_new_cols, master_lp_primal_sol, master_ip_primal_sol)
+    return ColGenIterationOutput(mlp, db, nb_new_cols, master_lp_dual_sol, master_ip_primal_sol)
 end
 
 get_dual_bound(output::ColGenIterationOutput) = output.dual_bound

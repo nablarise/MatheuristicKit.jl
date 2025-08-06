@@ -47,6 +47,7 @@ function add_variable!(
     # Update existing constraints with new variable coefficients
     for (constraint_ref, coeff) in constraint_coeffs
         if coeff != 0.0
+            @assert MOI.is_valid(model, constraint_ref) "Invalid constraint reference: $constraint_ref not found in model"
             # Get the current constraint function
             current_func = MOI.get(model, MOI.ConstraintFunction(), constraint_ref)
             
