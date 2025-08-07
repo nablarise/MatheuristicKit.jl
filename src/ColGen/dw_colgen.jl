@@ -222,7 +222,7 @@ end
 ##### column generation phase
 
 function stop_colgen_phase(context::DantzigWolfeColGenImpl, ::MixedPhase1and2, colgen_iter_output, incumbent_dual_bound, ip_primal_sol, iteration)
-    return iteration > 10
+    return iteration > 30
 end
 
 struct ColGenIterationOutput

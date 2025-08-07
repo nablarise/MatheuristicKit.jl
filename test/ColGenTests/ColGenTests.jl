@@ -19,6 +19,8 @@ include("dw_colgen_iteration.jl")
 include("optimizer_validation.jl")
 include("wolsey_integration.jl")
 include("master_primal_solution_printing.jl")
+include("master_dual_solution_printing.jl")
+include("gap_e2e_tests.jl")
 
 dw_annotation(::Val{:assignment}, machine, job) = RK.dantzig_wolfe_subproblem(machine);
 dw_annotation(::Val{:coverage}, job) = RK.dantzig_wolfe_master();
@@ -120,10 +122,16 @@ function run()
     # Run MasterPrimalSolution printing tests
     test_unit_master_primal_solution_printing()
     
+    # Run MasterDualSolution printing tests
+    test_unit_master_dual_solution_printing()
+    
     # Run generalized assignment E2E test
     @testset "[generalized_assignment] E2E Column Generation Test" begin
         test_generalized_assignment_e2e()
     end
+    
+    # Run GAP E2E tests with different constraint types
+    test_gap_e2e_all()
     
     # # Run column generation example
     # machines = 1:3;
