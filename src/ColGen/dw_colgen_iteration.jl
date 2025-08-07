@@ -1,277 +1,20 @@
-# Master
 
 struct MasterPrimalSolution
-    obj_value::Float64
-    variable_values::Dict{MOI.VariableIndex,Float64}
-end
-
-function Base.show(io::IO, sol::MasterPrimalSolution, model)
-    println(io, "Primal solution:")
-    
-    # Sort variables by index for consistent output
-    sorted_vars = sort(collect(sol.variable_values), by = x -> x[1].value)
-    
-    for (i, (var_index, value)) in enumerate(sorted_vars)
-        # Get variable name if it exists
-        var_name = MOI.get(model, MOI.VariableName(), var_index)
-        if isempty(var_name)
-            var_name = "_[$(var_index.value)]"
-        end
-        
-        # Use appropriate connector: | for middle items, └ for last item
-        connector = i == length(sorted_vars) ? "└" : "|"
-        println(io, "$connector $var_name: $value")
-    end
-    
-    print(io, "└ cost = $(sol.obj_value)")
-end
-
-function Base.show(io::IO, sol::MasterPrimalSolution, jump_model::JuMP.Model)
-    println(io, "Primal solution:")
-    
-    # Sort variables by index for consistent output
-    sorted_vars = sort(collect(sol.variable_values), by = x -> x[1].value)
-    
-    for (i, (var_index, value)) in enumerate(sorted_vars)
-        # Convert MOI.VariableIndex to JuMP.VariableRef to access JuMP variable names
-        var_name = try
-            var_ref = JuMP.VariableRef(jump_model, var_index)
-            jump_name = JuMP.name(var_ref)
-            if isempty(jump_name)
-                "_[$(var_index.value)]"
-            else
-                jump_name
-            end
-        catch
-            # Fallback if variable doesn't exist in JuMP model
-            "_[$(var_index.value)]"
-        end
-        
-        # Use appropriate connector: | for middle items, └ for last item
-        connector = i == length(sorted_vars) ? "└" : "|"
-        println(io, "$connector $var_name: $value")
-    end
-    
-    print(io, "└ cost = $(sol.obj_value)")
-end
-
-function Base.show(io::IO, sol::MasterPrimalSolution)
-    println(io, "Primal solution:")
-    
-    # Sort variables by index for consistent output
-    sorted_vars = sort(collect(sol.variable_values), by = x -> x[1].value)
-    
-    for (i, (var_index, value)) in enumerate(sorted_vars)
-        var_name = "_[$(var_index.value)]"
-        
-        # Use appropriate connector: | for middle items, └ for last item
-        connector = i == length(sorted_vars) ? "└" : "|"
-        println(io, "$connector $var_name: $value")
-    end
-    
-    print(io, "└ cost = $(sol.obj_value)")
+    sol::PrimalMoiSolution
 end
 
 struct MasterDualSolution
-    obj_value::Float64
-    constraint_duals::Dict{Type{<:MOI.ConstraintIndex},Dict{Int64,Float64}}
+    sol::DualMoiSolution
 end
 
-function Base.show(io::IO, sol::MasterDualSolution, model)
-    println(io, "Dual solution:")
-    
-    # Collect all constraints with their types and sort them
-    all_constraints = []
-    for (constraint_type, constraint_dict) in sol.constraint_duals
-        for (index_value, dual_value) in constraint_dict
-            # Reconstruct the MOI.ConstraintIndex from type and value
-            constraint_index = constraint_type(index_value)
-            push!(all_constraints, (constraint_type, constraint_index, dual_value))
-        end
-    end
-    
-    # Sort by constraint type name, then by index value for consistency
-    sort!(all_constraints, by = x -> (string(x[1]), x[2].value))
-    
-    for (i, (constraint_type, constraint_index, dual_value)) in enumerate(all_constraints)
-        # Get constraint name if it exists, with special handling for variable bounds
-        constraint_name = try
-            # Check if this is a variable bound constraint (function is MOI.VariableIndex)
-            constraint_func = MOI.get(model, MOI.ConstraintFunction(), constraint_index)
-            if constraint_func isa MOI.VariableIndex
-                # This is a variable bound constraint
-                var_index = constraint_func
-                var_name = MOI.get(model, MOI.VariableName(), var_index)
-                if isempty(var_name)
-                    var_name = "var[$(var_index.value)]"
-                end
-                
-                # Get the constraint set to determine bound type and value
-                constraint_set = MOI.get(model, MOI.ConstraintSet(), constraint_index)
-                if constraint_set isa MOI.GreaterThan
-                    "$(var_name) >= $(constraint_set.lower)"
-                elseif constraint_set isa MOI.LessThan
-                    "$(var_name) <= $(constraint_set.upper)"
-                elseif constraint_set isa MOI.EqualTo
-                    "$(var_name) == $(constraint_set.value)"
-                else
-                    # Other bound types (like Interval, etc.)
-                    "$(var_name) in $(constraint_set)"
-                end
-            else
-                # Regular constraint - try to get its name
-                name = MOI.get(model, MOI.ConstraintName(), constraint_index)
-                if isempty(name)
-                    "constr[$(constraint_type)][$(constraint_index.value)]"
-                else
-                    name
-                end
-            end
-        catch
-            # Fallback if constraint doesn't exist in model
-            "constr[$(constraint_type)][$(constraint_index.value)]"
-        end
-        
-        # Use appropriate connector: | for middle items, └ for last item
-        connector = i == length(all_constraints) ? "└" : "|"
-        println(io, "$connector $constraint_name: $dual_value")
-    end
-    
-    print(io, "└ cost = $(sol.obj_value)")
-end
+# Base.show methods for wrapper types - delegate to unified solution show methods
+Base.show(io::IO, sol::MasterPrimalSolution) = show(io, sol.sol)
+Base.show(io::IO, sol::MasterPrimalSolution, model) = show(io, sol.sol, model) 
+Base.show(io::IO, sol::MasterDualSolution) = show(io, sol.sol)
+Base.show(io::IO, sol::MasterDualSolution, model) = show(io, sol.sol, model)
 
-function Base.show(io::IO, sol::MasterDualSolution, jump_model::JuMP.Model)
-    println(io, "Dual solution:")
-    
-    # Collect all constraints with their types and sort them
-    all_constraints = []
-    for (constraint_type, constraint_dict) in sol.constraint_duals
-        for (index_value, dual_value) in constraint_dict
-            # Reconstruct the MOI.ConstraintIndex from type and value
-            constraint_index = constraint_type(index_value)
-            push!(all_constraints, (constraint_type, constraint_index, dual_value))
-        end
-    end
-    
-    # Sort by constraint type name, then by index value for consistency
-    sort!(all_constraints, by = x -> (string(x[1]), x[2].value))
-    
-    for (i, (constraint_type, constraint_index, dual_value)) in enumerate(all_constraints)
-        # Get constraint name from JuMP model if it exists, with special handling for variable bounds
-        constraint_name = try
-            # Get MOI backend to check constraint function type
-            moi_backend = JuMP.backend(jump_model)
-            constraint_func = MOI.get(moi_backend, MOI.ConstraintFunction(), constraint_index)
-            
-            if constraint_func isa MOI.VariableIndex
-                # This is a variable bound constraint
-                var_index = constraint_func
-                # Convert to JuMP variable reference to get name
-                var_ref = JuMP.VariableRef(jump_model, var_index)
-                var_name = JuMP.name(var_ref)
-                if isempty(var_name)
-                    var_name = "var[$(var_index.value)]"
-                end
-                
-                # Get the constraint set to determine bound type and value
-                constraint_set = MOI.get(moi_backend, MOI.ConstraintSet(), constraint_index)
-                if constraint_set isa MOI.GreaterThan
-                    "$(var_name) >= $(constraint_set.lower)"
-                elseif constraint_set isa MOI.LessThan
-                    "$(var_name) <= $(constraint_set.upper)"
-                elseif constraint_set isa MOI.EqualTo
-                    "$(var_name) == $(constraint_set.value)"
-                else
-                    # Other bound types (like Interval, etc.)
-                    "$(var_name) in $(constraint_set)"
-                end
-            else
-                # Regular constraint - try to get JuMP constraint name
-                constraint_ref = JuMP.constraint_ref_with_index(jump_model, constraint_index)
-                jump_name = JuMP.name(constraint_ref)
-                if isempty(jump_name)
-                    "constr[$(constraint_type)][$(constraint_index.value)]"
-                else
-                    jump_name
-                end
-            end
-        catch
-            # Fallback if constraint doesn't exist in JuMP model
-            "constr[$(constraint_type)][$(constraint_index.value)]"
-        end
-        
-        # Use appropriate connector: | for middle items, └ for last item
-        connector = i == length(all_constraints) ? "└" : "|"
-        println(io, "$connector $constraint_name: $dual_value")
-    end
-    
-    print(io, "└ cost = $(sol.obj_value)")
-end
-
-function Base.show(io::IO, sol::MasterDualSolution)
-    println(io, "Dual solution:")
-    
-    # Collect all constraints with their types and sort them
-    all_constraints = []
-    for (constraint_type, constraint_dict) in sol.constraint_duals
-        for (index_value, dual_value) in constraint_dict
-            push!(all_constraints, (constraint_type, index_value, dual_value))
-        end
-    end
-    
-    # Sort by constraint type name, then by index value for consistency
-    sort!(all_constraints, by = x -> (string(x[1]), x[2]))
-    
-    for (i, (constraint_type, index_value, dual_value)) in enumerate(all_constraints)
-        constraint_name = "constr[$(constraint_type)][$(index_value)]"
-        
-        # Use appropriate connector: | for middle items, └ for last item
-        connector = i == length(all_constraints) ? "└" : "|"
-        println(io, "$connector $constraint_name: $dual_value")
-    end
-    
-    print(io, "└ cost = $(sol.obj_value)")
-end
-
-function recompute_cost(dual_sol::MasterDualSolution, model)::Float64
-    total_cost = 0.0
-    
-    # Iterate through all constraint types and their dual values
-    for (constraint_type, constraint_dict) in dual_sol.constraint_duals
-        for (index_value, dual_value) in constraint_dict
-            # Reconstruct the MOI.ConstraintIndex from type and value
-            constraint_index = constraint_type(index_value)
-            
-            try
-                # Get the constraint set to extract RHS value
-                constraint_set = MOI.get(model, MOI.ConstraintSet(), constraint_index)
-                
-                # Extract RHS based on constraint set type
-                rhs_value = if constraint_set isa MOI.LessThan
-                    constraint_set.upper
-                elseif constraint_set isa MOI.GreaterThan
-                    constraint_set.lower
-                elseif constraint_set isa MOI.EqualTo
-                    constraint_set.value
-                else
-                    # For other constraint types (like Interval), we might need more sophisticated handling
-                    # For now, skip these constraints
-                    continue
-                end
-                
-                # Accumulate: dual_value * rhs_value
-                total_cost += dual_value * rhs_value
-                
-            catch e
-                # If constraint doesn't exist in model or other error, skip it
-                # This handles cases where constraint indices might be stale
-                continue
-            end
-        end
-    end
-    
-    return total_cost
-end
+# Wrapper function for recompute_cost with MasterDualSolution
+recompute_cost(dual_sol::MasterDualSolution, model) = recompute_cost(dual_sol.sol, model)
 
 struct MasterSolution
     moi_termination_status::MOI.TerminationStatusCode
@@ -280,9 +23,10 @@ struct MasterSolution
     primal_sol::MasterPrimalSolution
     dual_sol::MasterDualSolution
 end
+
 is_infeasible(sol::MasterSolution) = sol.moi_termination_status == MOI.INFEASIBLE
 is_unbounded(sol::MasterSolution) = sol.moi_termination_status == MOI.DUAL_INFEASIBLE || sol.moi_termination_status == MOI.INFEASIBLE_OR_UNBOUNDED
-get_obj_val(sol::MasterSolution) = sol.primal_sol.obj_value
+get_obj_val(sol::MasterSolution) = sol.primal_sol.sol.obj_value
 
 get_primal_sol(sol::MasterSolution) = sol.primal_sol
 get_dual_sol(sol::MasterSolution) = sol.dual_sol
@@ -341,13 +85,13 @@ function optimize_master_lp_problem!(master, ::DantzigWolfeColGenImpl)
     obj_value = MOI.get(moi_master(master), MOI.ObjectiveValue())
     # Get variable primal values
     variable_values = _populate_variable_values(moi_master(master))
-    primal_sol = MasterPrimalSolution(obj_value, variable_values)
+    primal_sol = MasterPrimalSolution(PrimalMoiSolution(obj_value, variable_values))
 
     # Get dual objective value
     dual_obj_value = MOI.get(moi_master(master), MOI.DualObjectiveValue())
     # Get constraint dual values
     constraint_duals = _populate_constraint_duals(moi_master(master))
-    dual_sol = MasterDualSolution(dual_obj_value, constraint_duals)
+    dual_sol = MasterDualSolution(DualMoiSolution(dual_obj_value, constraint_duals))
     return MasterSolution(
         MOI.get(moi_master(master), MOI.TerminationStatus()),
         MOI.get(moi_master(master), MOI.PrimalStatus()),
@@ -403,8 +147,8 @@ function compute_reduced_costs!(context::DantzigWolfeColGenImpl, phase::MixedPha
 
             for (constraint_type, constraint_value, coeff) in coefficients
                 # Direct lookup in type-stable dual solution structure
-                if haskey(mast_dual_sol.constraint_duals, constraint_type)
-                    constraint_dict = mast_dual_sol.constraint_duals[constraint_type]
+                if haskey(mast_dual_sol.sol.constraint_duals, constraint_type)
+                    constraint_dict = mast_dual_sol.sol.constraint_duals[constraint_type]
                     constr_sign = _constr_sign(constraint_type)
                     if haskey(constraint_dict, constraint_value)
                         dual_value = constraint_dict[constraint_value]
@@ -469,8 +213,7 @@ get_dual_bound(sol::PricingSolution) = sol.dual_bound
 
 struct PricingPrimalMoiSolution
     subproblem_id::Any  # Subproblem that generated this solution
-    obj_value::Float64  # The true reduced cost including convexity constraint contribution
-    variable_values::Dict{MOI.VariableIndex,Float64}
+    solution::PrimalMoiSolution  # Wraps unified solution type
     is_improving::Bool  # Whether this solution has an improving reduced cost
 end
 
@@ -516,8 +259,8 @@ function optimize_pricing_problem!(context::DantzigWolfeColGenImpl, sp_id::Any, 
         constraint_type = typeof(constraint_index)
         constraint_value = constraint_index.value
         
-        if haskey(mast_dual_sol.constraint_duals, constraint_type)
-            constraint_dict = mast_dual_sol.constraint_duals[constraint_type]
+        if haskey(mast_dual_sol.sol.constraint_duals, constraint_type)
+            constraint_dict = mast_dual_sol.sol.constraint_duals[constraint_type]
             if haskey(constraint_dict, constraint_value)
                 lb_dual = constraint_dict[constraint_value]
             end
@@ -530,8 +273,8 @@ function optimize_pricing_problem!(context::DantzigWolfeColGenImpl, sp_id::Any, 
         constraint_type = typeof(constraint_index)
         constraint_value = constraint_index.value
         
-        if haskey(mast_dual_sol.constraint_duals, constraint_type)
-            constraint_dict = mast_dual_sol.constraint_duals[constraint_type]
+        if haskey(mast_dual_sol.sol.constraint_duals, constraint_type)
+            constraint_dict = mast_dual_sol.sol.constraint_duals[constraint_type]
             if haskey(constraint_dict, constraint_value)
                 ub_dual = constraint_dict[constraint_value]
             end
@@ -554,7 +297,8 @@ function optimize_pricing_problem!(context::DantzigWolfeColGenImpl, sp_id::Any, 
 
     # Get variable primal values
     variable_values = _populate_variable_values(moi_pricing_sp(pricing_sp))
-    primal_sol = PricingPrimalMoiSolution(sp_id, reduced_cost, variable_values, is_improving)
+    unified_solution = PrimalMoiSolution(reduced_cost, variable_values)
+    primal_sol = PricingPrimalMoiSolution(sp_id, unified_solution, is_improving)
 
     moi_termination_status = MOI.get(moi_pricing_sp(pricing_sp), MOI.TerminationStatus())
 
@@ -580,8 +324,8 @@ function _subproblem_convexity_contrib(impl::DantzigWolfeColGenImpl, sp_id::Any,
         constraint_type = typeof(constraint_index)
         constraint_value = constraint_index.value
         
-        if haskey(mast_dual_sol.constraint_duals, constraint_type)
-            constraint_dict = mast_dual_sol.constraint_duals[constraint_type]
+        if haskey(mast_dual_sol.sol.constraint_duals, constraint_type)
+            constraint_dict = mast_dual_sol.sol.constraint_duals[constraint_type]
             if haskey(constraint_dict, constraint_value)
                 dual_value = constraint_dict[constraint_value]
                 convexity_contribution += dual_value
@@ -595,8 +339,8 @@ function _subproblem_convexity_contrib(impl::DantzigWolfeColGenImpl, sp_id::Any,
         constraint_type = typeof(constraint_index)
         constraint_value = constraint_index.value
         
-        if haskey(mast_dual_sol.constraint_duals, constraint_type)
-            constraint_dict = mast_dual_sol.constraint_duals[constraint_type]
+        if haskey(mast_dual_sol.sol.constraint_duals, constraint_type)
+            constraint_dict = mast_dual_sol.sol.constraint_duals[constraint_type]
             if haskey(constraint_dict, constraint_value)
                 dual_value = constraint_dict[constraint_value]
                 convexity_contribution += dual_value
@@ -618,8 +362,8 @@ function _convexity_contrib(impl::DantzigWolfeColGenImpl, sep_mast_dual_sol::Mas
         constraint_set = MOI.get(master.moi_master, MOI.ConstraintSet(), constraint_index)
         rhs = constraint_set.upper
         
-        if haskey(sep_mast_dual_sol.constraint_duals, constraint_type)
-            constraint_dict = sep_mast_dual_sol.constraint_duals[constraint_type]
+        if haskey(sep_mast_dual_sol.sol.constraint_duals, constraint_type)
+            constraint_dict = sep_mast_dual_sol.sol.constraint_duals[constraint_type]
             if haskey(constraint_dict, constraint_value)
                 dual_value = constraint_dict[constraint_value]
                 convexity_contribution += rhs * dual_value
@@ -634,8 +378,8 @@ function _convexity_contrib(impl::DantzigWolfeColGenImpl, sep_mast_dual_sol::Mas
         constraint_set = MOI.get(master.moi_master, MOI.ConstraintSet(), constraint_index)
         rhs = constraint_set.lower
         
-        if haskey(sep_mast_dual_sol.constraint_duals, constraint_type)
-            constraint_dict = sep_mast_dual_sol.constraint_duals[constraint_type]
+        if haskey(sep_mast_dual_sol.sol.constraint_duals, constraint_type)
+            constraint_dict = sep_mast_dual_sol.sol.constraint_duals[constraint_type]
             if haskey(constraint_dict, constraint_value)
                 dual_value = constraint_dict[constraint_value]
                 convexity_contribution += rhs * dual_value
@@ -677,7 +421,7 @@ function _subprob_contrib(impl::DantzigWolfeColGenImpl, sps_db::Dict{Int64,Float
 end
 
 function compute_dual_bound(impl::DantzigWolfeColGenImpl, ::MixedPhase1and2, sps_db::Dict{Int64,Float64}, mast_dual_sol::MasterDualSolution)
-    master_lp_obj_val = mast_dual_sol.obj_value - _convexity_contrib(impl, mast_dual_sol)
+    master_lp_obj_val = mast_dual_sol.sol.obj_value - _convexity_contrib(impl, mast_dual_sol)
     
     sp_contrib = _subprob_contrib(impl, sps_db)
     
@@ -688,7 +432,7 @@ function _compute_original_column_cost(column::PricingPrimalMoiSolution, origina
     # Compute the original cost of the column using costs from the compact formulation
     # This is ∑(c_i * x_i) where c_i are original variable costs and x_i are solution values
     original_cost = 0.0
-    for (var_index, var_value) in column.variable_values
+    for (var_index, var_value) in column.solution.variable_values
         if haskey(original_cost_mapping, var_index)
             original_cost += original_cost_mapping[var_index] * var_value
         end
@@ -705,7 +449,7 @@ function _compute_master_constraint_membership(
     sp_id = column.subproblem_id
     
     # Compute coupling constraint memberships (A * x for each constraint)
-    for (var_index, var_value) in column.variable_values
+    for (var_index, var_value) in column.solution.variable_values
         coefficients = RK.get_variable_coefficients(coupling_mapping, var_index)
         for (constraint_type, constraint_value, coeff) in coefficients
             constraint_ref = constraint_type(constraint_value)

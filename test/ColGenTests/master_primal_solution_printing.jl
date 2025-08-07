@@ -25,7 +25,7 @@ function test_master_primal_solution_printing_with_named_variables()
         y => 0.0,
         z => 1.25
     )
-    solution = MK.ColGen.MasterPrimalSolution(123.45, variable_values)
+    solution = MK.ColGen.MasterPrimalSolution(MK.ColGen.PrimalMoiSolution(123.45, variable_values))
     
     # Test output with model (named variables)
     io = IOBuffer()
@@ -58,7 +58,7 @@ function test_master_primal_solution_printing_without_model()
         y_index => -5.5,
         z_index => 0.0
     )
-    solution = MK.ColGen.MasterPrimalSolution(-42.7, variable_values)
+    solution = MK.ColGen.MasterPrimalSolution(MK.ColGen.PrimalMoiSolution(-42.7, variable_values))
     
     # Test output without model (fallback names)
     io = IOBuffer()
@@ -90,7 +90,7 @@ function test_master_primal_solution_printing_mixed_named_unnamed()
         y => 2.0, 
         z => 3.0
     )
-    solution = MK.ColGen.MasterPrimalSolution(100.0, variable_values)
+    solution = MK.ColGen.MasterPrimalSolution(MK.ColGen.PrimalMoiSolution(100.0, variable_values))
     
     io = IOBuffer()
     show(io, solution, model)
@@ -104,7 +104,7 @@ end
 
 function test_master_primal_solution_printing_edge_cases()
     # Test empty solution
-    empty_solution = MK.ColGen.MasterPrimalSolution(0.0, Dict{MOI.VariableIndex,Float64}())
+    empty_solution = MK.ColGen.MasterPrimalSolution(MK.ColGen.PrimalMoiSolution(0.0, Dict{MOI.VariableIndex,Float64}()))
     
     io = IOBuffer()
     show(io, empty_solution)
@@ -115,7 +115,7 @@ function test_master_primal_solution_printing_edge_cases()
     
     # Test single variable
     single_var_index = MOI.VariableIndex(42)
-    single_solution = MK.ColGen.MasterPrimalSolution(999.999, Dict(single_var_index => 123.456))
+    single_solution = MK.ColGen.MasterPrimalSolution(MK.ColGen.PrimalMoiSolution(999.999, Dict(single_var_index => 123.456)))
     
     io = IOBuffer()
     show(io, single_solution)
@@ -149,7 +149,7 @@ function test_master_primal_solution_formatting_consistency()
         vars[2] => 2.0,
         vars[4] => 4.0
     )
-    solution = MK.ColGen.MasterPrimalSolution(15.0, variable_values)
+    solution = MK.ColGen.MasterPrimalSolution(MK.ColGen.PrimalMoiSolution(15.0, variable_values))
     
     io = IOBuffer()
     show(io, solution, model)
@@ -188,7 +188,7 @@ function test_master_primal_solution_printing_with_jump_model()
         y_index => 25.0,
         slack_index => 0.0
     )
-    solution = MK.ColGen.MasterPrimalSolution(456.78, variable_values)
+    solution = MK.ColGen.MasterPrimalSolution(MK.ColGen.PrimalMoiSolution(456.78, variable_values))
     
     # Test output with JuMP model (should show JuMP variable names)
     io = IOBuffer()
@@ -226,7 +226,7 @@ function test_master_primal_solution_jump_model_mixed_named_unnamed()
         x_index => 10.0,
         y_index => 15.0
     )
-    solution = MK.ColGen.MasterPrimalSolution(200.0, variable_values)
+    solution = MK.ColGen.MasterPrimalSolution(MK.ColGen.PrimalMoiSolution(200.0, variable_values))
     
     io = IOBuffer()
     show(io, solution, jump_model)
@@ -254,7 +254,7 @@ function test_master_primal_solution_jump_model_edge_cases()
         valid_index => 1.0,
         invalid_index => 2.0  # Should trigger fallback
     )
-    solution = MK.ColGen.MasterPrimalSolution(50.0, variable_values)
+    solution = MK.ColGen.MasterPrimalSolution(MK.ColGen.PrimalMoiSolution(50.0, variable_values))
     
     io = IOBuffer()
     show(io, solution, jump_model)

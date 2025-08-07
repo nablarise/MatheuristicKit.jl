@@ -8,6 +8,7 @@ const RK = ReformulationKit
 
 include("helpers.jl")
 include("coluna.jl")
+include("moi_solutions.jl")
 include("dw_colgen.jl")
 include("dw_colgen_iteration.jl")
 include("dw_stabilization.jl")

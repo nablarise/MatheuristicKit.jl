@@ -27,8 +27,8 @@ function test_optimize_master_lp_primal_integration()
 
     primal_solution = MK.ColGen.get_primal_sol(master_solution)
     @test primal_solution isa MK.ColGen.MasterPrimalSolution
-    @test primal_solution.obj_value == 1.0
-    @test primal_solution.variable_values[JuMP.index(x)] == 1.0
+    @test primal_solution.sol.obj_value == 1.0
+    @test primal_solution.sol.variable_values[JuMP.index(x)] == 1.0
 end
 
 function test_optimize_master_lp_dual_integration()
@@ -58,12 +58,12 @@ function test_optimize_master_lp_dual_integration()
 
     dual_solution = MK.ColGen.get_dual_sol(master_solution)
     @test dual_solution isa MK.ColGen.MasterDualSolution
-    @test dual_solution.obj_value == 7.0
+    @test dual_solution.sol.obj_value == 7.0
 
-    @test dual_solution.constraint_duals[MOI.ConstraintIndex{MOI.VariableIndex,MOI.GreaterThan{Float64}}][JuMP.index(JuMP.LowerBoundRef(x)).value] == 0
-    @test dual_solution.constraint_duals[MOI.ConstraintIndex{MOI.VariableIndex,MOI.GreaterThan{Float64}}][JuMP.index(JuMP.LowerBoundRef(y)).value] == 2
-    @test dual_solution.constraint_duals[MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}}][JuMP.index(cstr1).value] == 0
-    @test dual_solution.constraint_duals[MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.EqualTo{Float64}}][JuMP.index(cstr2).value] == 1
+    @test dual_solution.sol.constraint_duals[MOI.ConstraintIndex{MOI.VariableIndex,MOI.GreaterThan{Float64}}][JuMP.index(JuMP.LowerBoundRef(x)).value] == 0
+    @test dual_solution.sol.constraint_duals[MOI.ConstraintIndex{MOI.VariableIndex,MOI.GreaterThan{Float64}}][JuMP.index(JuMP.LowerBoundRef(y)).value] == 2
+    @test dual_solution.sol.constraint_duals[MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}}][JuMP.index(cstr1).value] == 0
+    @test dual_solution.sol.constraint_duals[MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64}, MOI.EqualTo{Float64}}][JuMP.index(cstr2).value] == 1
 end
 
 function test_reduced_costs_computation_basic()
@@ -162,7 +162,7 @@ function test_reduced_costs_computation_basic()
     constraint_duals[leq_constraint_type] = Dict(2 => dual_values[2])
     constraint_duals[eq_constraint_type] = Dict(3 => dual_values[3])
     
-    mast_dual_sol = MK.ColGen.MasterDualSolution(0.0, constraint_duals)
+    mast_dual_sol = MK.ColGen.MasterDualSolution(MK.ColGen.DualMoiSolution(0.0, constraint_duals))
     
     reduced_costs = MK.ColGen.compute_reduced_costs!(context, MK.ColGen.MixedPhase1and2(), mast_dual_sol)
 
@@ -273,8 +273,7 @@ function test_compute_original_column_cost_basic()
     
     column = MK.ColGen.PricingPrimalMoiSolution(
         1,  # subproblem_id
-        -5.0,  # obj_value (reduced cost, not used in this test)
-        variable_values_dict,
+        MK.ColGen.PrimalMoiSolution(-5.0, variable_values_dict),  # wrapped unified solution
         true  # is_improving (negative reduced cost for minimization)
     )
     
@@ -360,8 +359,7 @@ function test_compute_master_constraint_membership_basic()
     
     column = MK.ColGen.PricingPrimalMoiSolution(
         1,  # subproblem_id
-        -2.0,  # obj_value (reduced cost, not used in this test)
-        variable_values_dict,
+        MK.ColGen.PrimalMoiSolution(-2.0, variable_values_dict),  # wrapped unified solution
         true  # is_improving (negative reduced cost for minimization)
     )
     
@@ -403,8 +401,7 @@ function test_compute_master_constraint_membership_basic()
     # Additional test: empty variable values should return only convexity constraints
     empty_column = MK.ColGen.PricingPrimalMoiSolution(
         1,  # subproblem_id
-        0.0,  # obj_value
-        Dict{MOI.VariableIndex, Float64}(),  # empty variable values
+        MK.ColGen.PrimalMoiSolution(0.0, Dict{MOI.VariableIndex, Float64}()),  # wrapped unified solution
         false  # is_improving (zero reduced cost is not improving)
     )
     empty_result = MK.ColGen._compute_master_constraint_membership(empty_column, coupling_mapping, master)

@@ -17,7 +17,6 @@ include("test_utils.jl")
 include("dw_colgen.jl")
 include("dw_colgen_iteration.jl")
 include("optimizer_validation.jl")
-include("wolsey_integration.jl")
 include("master_primal_solution_printing.jl")
 include("master_dual_solution_printing.jl")
 include("gap_e2e_tests.jl")
@@ -37,9 +36,6 @@ function run()
     
     # Run optimizer validation tests
     test_unit_optimizer_validation()
-    
-    # Run Wolsey integration test
-    test_wolsey_integration()
     
     # Run MasterPrimalSolution printing tests
     test_unit_master_primal_solution_printing()

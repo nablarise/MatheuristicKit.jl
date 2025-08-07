@@ -30,7 +30,7 @@ function test_master_dual_solution_printing_with_named_constraints()
     constraint_duals[eq_type] = Dict{Int64,Float64}(eq_constraint.value => 2.5)
     constraint_duals[leq_type] = Dict{Int64,Float64}(leq_constraint.value => 1.0)
     
-    solution = MK.ColGen.MasterDualSolution(123.45, constraint_duals)
+    solution = MK.ColGen.MasterDualSolution(MK.ColGen.DualMoiSolution(123.45, constraint_duals))
     
     # Test output with model (named constraints)
     io = IOBuffer()
@@ -62,7 +62,7 @@ function test_master_dual_solution_printing_without_model()
     constraint_duals[eq_type] = Dict{Int64,Float64}(1 => 3.5, 3 => -2.0)
     constraint_duals[leq_type] = Dict{Int64,Float64}(2 => 0.5)
     
-    solution = MK.ColGen.MasterDualSolution(-42.7, constraint_duals)
+    solution = MK.ColGen.MasterDualSolution(MK.ColGen.DualMoiSolution(-42.7, constraint_duals))
     
     # Test output without model (fallback names)
     io = IOBuffer()
@@ -106,7 +106,7 @@ function test_master_dual_solution_printing_mixed_named_unnamed()
     constraint_duals[named_type] = Dict{Int64,Float64}(named_constraint.value => 1.5)
     constraint_duals[unnamed_type] = Dict{Int64,Float64}(unnamed_constraint.value => 2.5)
     
-    solution = MK.ColGen.MasterDualSolution(100.0, constraint_duals)
+    solution = MK.ColGen.MasterDualSolution(MK.ColGen.DualMoiSolution(100.0, constraint_duals))
     
     io = IOBuffer()
     show(io, solution, model)
@@ -121,7 +121,7 @@ end
 function test_master_dual_solution_printing_edge_cases()
     # Test empty solution
     empty_constraint_duals = Dict{Type{<:MOI.ConstraintIndex},Dict{Int64,Float64}}()
-    empty_solution = MK.ColGen.MasterDualSolution(0.0, empty_constraint_duals)
+    empty_solution = MK.ColGen.MasterDualSolution(MK.ColGen.DualMoiSolution(0.0, empty_constraint_duals))
     
     io = IOBuffer()
     show(io, empty_solution)
@@ -135,7 +135,7 @@ function test_master_dual_solution_printing_edge_cases()
     eq_type = MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64},MOI.EqualTo{Float64}}
     constraint_duals[eq_type] = Dict{Int64,Float64}(42 => 123.456)
     
-    single_solution = MK.ColGen.MasterDualSolution(999.999, constraint_duals)
+    single_solution = MK.ColGen.MasterDualSolution(MK.ColGen.DualMoiSolution(999.999, constraint_duals))
     
     io = IOBuffer()
     show(io, single_solution)
@@ -163,7 +163,7 @@ function test_master_dual_solution_formatting_consistency()
     constraint_duals[eq_type] = Dict{Int64,Float64}(2 => 2.0)
     constraint_duals[geq_type] = Dict{Int64,Float64}(4 => 4.0)
     
-    solution = MK.ColGen.MasterDualSolution(15.0, constraint_duals)
+    solution = MK.ColGen.MasterDualSolution(MK.ColGen.DualMoiSolution(15.0, constraint_duals))
     
     io = IOBuffer()
     show(io, solution)
@@ -208,7 +208,7 @@ function test_master_dual_solution_printing_with_jump_model()
     constraint_duals[balance_type] = Dict{Int64,Float64}(balance_index.value => 2.5)
     constraint_duals[capacity_type] = Dict{Int64,Float64}(capacity_index.value => 1.0)
     
-    solution = MK.ColGen.MasterDualSolution(456.78, constraint_duals)
+    solution = MK.ColGen.MasterDualSolution(MK.ColGen.DualMoiSolution(456.78, constraint_duals))
     
     # Test output with JuMP model (should show JuMP constraint names)
     io = IOBuffer()
@@ -248,7 +248,7 @@ function test_master_dual_solution_jump_model_mixed_named_unnamed()
     constraint_duals[named_type] = Dict{Int64,Float64}(named_index.value => 5.0)
     constraint_duals[unnamed_type] = Dict{Int64,Float64}(unnamed_index.value => 10.0)
     
-    solution = MK.ColGen.MasterDualSolution(200.0, constraint_duals)
+    solution = MK.ColGen.MasterDualSolution(MK.ColGen.DualMoiSolution(200.0, constraint_duals))
     
     io = IOBuffer()
     show(io, solution, jump_model)
@@ -281,7 +281,7 @@ function test_master_dual_solution_jump_model_edge_cases()
         999 => 2.0  # Invalid index - should trigger fallback
     )
     
-    solution = MK.ColGen.MasterDualSolution(50.0, constraint_duals)
+    solution = MK.ColGen.MasterDualSolution(MK.ColGen.DualMoiSolution(50.0, constraint_duals))
     
     io = IOBuffer()
     show(io, solution, jump_model)
@@ -323,7 +323,7 @@ function test_master_dual_solution_variable_bounds_display()
     constraint_duals[typeof(eq_z)] = Dict{Int64,Float64}(eq_z.value => 3.5)
     constraint_duals[typeof(regular_constraint)] = Dict{Int64,Float64}(regular_constraint.value => 1.25)
     
-    solution = MK.ColGen.MasterDualSolution(150.0, constraint_duals)
+    solution = MK.ColGen.MasterDualSolution(MK.ColGen.DualMoiSolution(150.0, constraint_duals))
     
     io = IOBuffer()
     show(io, solution, moi_model)
@@ -367,7 +367,7 @@ function test_master_dual_solution_variable_bounds_jump_model()
         end
     end
     
-    solution = MK.ColGen.MasterDualSolution(75.0, constraint_duals)
+    solution = MK.ColGen.MasterDualSolution(MK.ColGen.DualMoiSolution(75.0, constraint_duals))
     
     io = IOBuffer()
     show(io, solution, jump_model)
@@ -402,7 +402,7 @@ function test_master_dual_solution_recompute_cost()
     constraint_duals[typeof(geq_constraint)] = Dict{Int64,Float64}(geq_constraint.value => 3.0)  # dual = 3.0, RHS = 5.0 -> contribution = 15.0
     
     # Expected total cost = 20.0 + 30.0 + 15.0 = 65.0
-    solution = MK.ColGen.MasterDualSolution(999.999, constraint_duals)  # Use different obj_value to verify independent computation
+    solution = MK.ColGen.MasterDualSolution(MK.ColGen.DualMoiSolution(999.999, constraint_duals))  # Use different obj_value to verify independent computation
     
     recomputed_cost = MK.ColGen.recompute_cost(solution, moi_model)
     
@@ -414,7 +414,7 @@ function test_master_dual_solution_recompute_cost_empty()
     moi_model = MOI.Utilities.Model{Float64}()
     
     empty_constraint_duals = Dict{Type{<:MOI.ConstraintIndex},Dict{Int64,Float64}}()
-    empty_solution = MK.ColGen.MasterDualSolution(123.45, empty_constraint_duals)
+    empty_solution = MK.ColGen.MasterDualSolution(MK.ColGen.DualMoiSolution(123.45, empty_constraint_duals))
     
     recomputed_cost = MK.ColGen.recompute_cost(empty_solution, moi_model)
     
@@ -438,7 +438,7 @@ function test_master_dual_solution_recompute_cost_with_invalid_constraints()
         999 => 10.0  # Invalid index - should be skipped
     )
     
-    solution = MK.ColGen.MasterDualSolution(0.0, constraint_duals)
+    solution = MK.ColGen.MasterDualSolution(MK.ColGen.DualMoiSolution(0.0, constraint_duals))
     
     recomputed_cost = MK.ColGen.recompute_cost(solution, moi_model)
     
@@ -467,7 +467,7 @@ function test_master_dual_solution_recompute_cost_variable_bounds()
     constraint_duals[typeof(eq_bound)] = Dict{Int64,Float64}(eq_bound.value => 0.5)  # dual = 0.5, RHS = 50.0 -> contribution = 25.0
     
     # Expected total cost = 0.0 + 200.0 + 25.0 = 225.0
-    solution = MK.ColGen.MasterDualSolution(0.0, constraint_duals)
+    solution = MK.ColGen.MasterDualSolution(MK.ColGen.DualMoiSolution(0.0, constraint_duals))
     
     recomputed_cost = MK.ColGen.recompute_cost(solution, moi_model)
     
@@ -484,7 +484,7 @@ function test_master_dual_solution_recompute_cost_zero_duals()
     constraint_duals = Dict{Type{<:MOI.ConstraintIndex},Dict{Int64,Float64}}()
     constraint_duals[typeof(constraint)] = Dict{Int64,Float64}(constraint.value => 0.0)
     
-    solution = MK.ColGen.MasterDualSolution(42.0, constraint_duals)
+    solution = MK.ColGen.MasterDualSolution(MK.ColGen.DualMoiSolution(42.0, constraint_duals))
     
     recomputed_cost = MK.ColGen.recompute_cost(solution, moi_model)
     

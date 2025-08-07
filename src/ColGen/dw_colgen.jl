@@ -18,7 +18,6 @@ struct ReformulationPricingSubprobsProvider
     reformulation::RK.DantzigWolfeReformulation
 end
 
-
 struct DantzigWolfeColGenImpl{M,P}
     master_provider::M           # Master + convexity + optimization sense + artificial vars
     pricing_subprobs_provider::P # Contains all mapping objects (coupling_constr_mapping, original_cost_mapping)
