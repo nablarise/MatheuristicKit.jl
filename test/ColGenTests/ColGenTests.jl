@@ -15,6 +15,12 @@ const MOI = MathOptInterface
 include("helpers.jl")
 include("test_utils.jl")
 include("dw_colgen.jl")
+include("master_optimization_tests.jl")
+include("reduced_costs_tests.jl")
+include("pricing_optimization_tests.jl")
+include("dual_bounds_tests.jl")
+include("column_insertion_tests.jl")
+include("ip_management_tests.jl")
 include("dw_colgen_iteration.jl")
 include("optimizer_validation.jl")
 include("master_primal_solution_printing.jl")
@@ -32,6 +38,15 @@ function run()
     # Run Dantzig-Wolfe column generation tests
     test_dw_colgen()
     
+    # Run modular column generation tests
+    test_unit_master_optimization()
+    test_unit_reduced_costs()
+    test_unit_pricing_optimization()
+    test_unit_dual_bounds()
+    test_unit_column_insertion()
+    test_unit_ip_management()
+    
+    # Run legacy test suite (for backward compatibility)
     test_unit_solution()
     
     # Run optimizer validation tests
