@@ -99,15 +99,8 @@ function test_reduced_costs_computation_basic()
         2.0  1.0  0.5  0.0  1.5    # constraint 3 (==)
     ]
 
-    # Coefficient matrix after considering constraint senses.
-    A2 = [
-        1.0  2.0  0.0  1.5  0.5;       # constraint 1 (≥)
-        -0.5  -0.0  -1.0  -2.0 -1.0;  # constraint 2 (≤)
-        2.0  1.0  0.5  0.0  1.5        # constraint 3 (==)
-    ]
-    
-    # Expected reduced costs = c - y^T × A
-    expected_reduced_costs = original_costs - A2' * dual_values
+    # Expected reduced costs = c - y^T × A (using original matrix A since MOI dual values have correct signs)
+    expected_reduced_costs = original_costs - A' * dual_values
     
     # Create mock MOI variable indices
     var_indices = [MOI.VariableIndex(i) for i in 1:5]

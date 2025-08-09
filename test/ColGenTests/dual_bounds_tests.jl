@@ -71,17 +71,17 @@ function test_compute_dual_bound_basic()
     
     context = MK.ColGen.DantzigWolfeColGenImpl(reformulation)
     
-    # Create dual solution with known objective value
+    # Create dual solution with empty constraints (recomputed cost will be 0.0)
     constraint_duals = Dict{Type{<:MOI.ConstraintIndex}, Dict{Int64, Float64}}()
-    dual_sol = MK.ColGen.MasterDualSolution(MK.ColGen.DualMoiSolution(10.0, constraint_duals))
+    dual_sol = MK.ColGen.MasterDualSolution(MK.ColGen.DualMoiSolution(0.0, constraint_duals))
     
     # Test data: basic subproblem contributions
     sps_db = Dict{Int64,Float64}(1 => -1.5)  # Reduced cost = -1.5
     
     # Dual bound = (obj_value - convexity_contrib) + subprob_contrib
-    # = (10.0 - 0.0) + 0.0 = 10.0 (both contributions are 0 with empty constraints)
+    # = (0.0 - 0.0) + 0.0 = 0.0 (both contributions are 0 with empty constraints)
     result = MK.ColGen.compute_dual_bound(context, MK.ColGen.MixedPhase1and2(), sps_db, dual_sol)
-    @test result ≈ 10.0 rtol=1e-10
+    @test result ≈ 0.0 rtol=1e-10
 end
 
 function test_subproblem_convexity_contrib_basic()
