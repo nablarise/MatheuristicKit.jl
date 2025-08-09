@@ -295,5 +295,22 @@ function recompute_cost(dual_sol::DualMoiSolution, model)::Float64
         end
     end
     
+    # Add objective constant term
+    try
+        objective_function = MOI.get(model, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}())
+        objective_constant = objective_function.constant
+        total_cost += objective_constant
+    catch
+        # If objective function is not ScalarAffineFunction or doesn't exist, 
+        # try other common objective types or default to 0
+        try
+            objective_function = MOI.get(model, MOI.ObjectiveFunction{MOI.ScalarQuadraticFunction{Float64}}())
+            objective_constant = objective_function.constant
+            total_cost += objective_constant
+        catch
+            # Default to 0 if we can't extract constant (e.g., single variable objective)
+        end
+    end
+    
     return total_cost
 end

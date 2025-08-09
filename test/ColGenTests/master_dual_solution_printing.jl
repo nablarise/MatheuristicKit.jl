@@ -491,6 +491,54 @@ function test_master_dual_solution_recompute_cost_zero_duals()
     @test recomputed_cost ≈ 0.0 atol=1e-6
 end
 
+function test_master_dual_solution_recompute_cost_with_objective_constant()
+    # Test that recompute_cost includes objective constant
+    moi_model = MOI.Utilities.Model{Float64}()
+    
+    # Add variable and constraint
+    x = MOI.add_variable(moi_model)
+    constraint = MOI.add_constraint(moi_model, MOI.ScalarAffineFunction([MOI.ScalarAffineTerm(1.0, x)], 0.0), MOI.EqualTo(10.0))
+    
+    # Set objective function with constant term
+    objective_constant = 25.5
+    objective_function = MOI.ScalarAffineFunction([MOI.ScalarAffineTerm(1.0, x)], objective_constant)
+    MOI.set(moi_model, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}(), objective_function)
+    
+    # Create constraint_duals
+    constraint_duals = Dict{Type{<:MOI.ConstraintIndex},Dict{Int64,Float64}}()
+    constraint_duals[typeof(constraint)] = Dict{Int64,Float64}(constraint.value => 2.0)  # dual = 2.0, RHS = 10.0 -> contribution = 20.0
+    
+    solution = MK.ColGen.MasterDualSolution(MK.ColGen.DualMoiSolution(0.0, constraint_duals))
+    
+    recomputed_cost = MK.ColGen.recompute_cost(solution, moi_model)
+    
+    # Expected cost = 2.0 * 10.0 + 25.5 = 45.5
+    @test recomputed_cost ≈ 45.5 atol=1e-6
+end
+
+function test_master_dual_solution_recompute_cost_objective_constant_only()
+    # Test with only objective constant (no constraints)
+    moi_model = MOI.Utilities.Model{Float64}()
+    
+    # Add variable for objective function
+    x = MOI.add_variable(moi_model)
+    
+    # Set objective function with only constant term (coefficient = 0.0)
+    objective_constant = 100.0
+    objective_function = MOI.ScalarAffineFunction([MOI.ScalarAffineTerm(0.0, x)], objective_constant)
+    MOI.set(moi_model, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}(), objective_function)
+    
+    # Create empty constraint_duals
+    empty_constraint_duals = Dict{Type{<:MOI.ConstraintIndex},Dict{Int64,Float64}}()
+    solution = MK.ColGen.MasterDualSolution(MK.ColGen.DualMoiSolution(0.0, empty_constraint_duals))
+    
+    recomputed_cost = MK.ColGen.recompute_cost(solution, moi_model)
+    
+    # Should just return the objective constant
+    @test recomputed_cost ≈ 100.0 atol=1e-6
+end
+
+
 function test_unit_master_dual_solution_printing()
     @testset "[master_dual_solution] printing with named constraints" begin
         test_master_dual_solution_printing_with_named_constraints()
@@ -551,4 +599,13 @@ function test_unit_master_dual_solution_printing()
     @testset "[master_dual_solution] recompute cost zero duals" begin
         test_master_dual_solution_recompute_cost_zero_duals()
     end
+    
+    @testset "[master_dual_solution] recompute cost with objective constant" begin
+        test_master_dual_solution_recompute_cost_with_objective_constant()
+    end
+    
+    @testset "[master_dual_solution] recompute cost objective constant only" begin
+        test_master_dual_solution_recompute_cost_objective_constant_only()
+    end
+    
 end
