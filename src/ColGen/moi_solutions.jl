@@ -256,7 +256,8 @@ end
 """
     recompute_cost(dual_sol::DualMoiSolution, model)::Float64
 
-Recompute the dual objective cost by multiplying dual values with RHS values.
+Recompute the dual objective cost by multiplying dual values with RHS values and adding the objective constant.
+The formula is: ∑(dual_value × rhs_value) + objective_constant
 """
 function recompute_cost(dual_sol::DualMoiSolution, model)::Float64
     total_cost = 0.0
@@ -295,6 +296,7 @@ function recompute_cost(dual_sol::DualMoiSolution, model)::Float64
         end
     end
     
+    # TODO.: ugly
     # Add objective constant term
     try
         objective_function = MOI.get(model, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}())

@@ -80,21 +80,22 @@ end
 
 function _subprob_contrib(impl::DantzigWolfeColGenImpl, sps_db::Dict{Int64,Float64})
     # Compute contribution from subproblem variables using multiplicity bounds
-    # Contribution = reduced_cost * multiplicity, where multiplicity depends on reduced cost sign
+    # Contribution = dual_bound * multiplicity, where multiplicity depends on reduced cost sign
     master = get_master(impl)
     subprob_contribution = 0.0
+    sense = is_minimization(impl) ? 1 : -1
     
-    for (sp_id, reduced_cost) in sps_db
+    for (sp_id, dual_bound) in sps_db
         multiplicity = 0.0
         
-        # Determine multiplicity based on reduced cost sign
-        if reduced_cost < 0  # Improving reduced cost: use upper multiplicity
+        # Determine multiplicity based on dual_bound sign
+        if sense * dual_bound < 0  
             if haskey(master.convexity_constraints_ub, sp_id)
                 constraint_index = master.convexity_constraints_ub[sp_id]
                 constraint_set = MOI.get(master.moi_master, MOI.ConstraintSet(), constraint_index)
                 multiplicity = constraint_set.upper
             end
-        else  # Non-improving reduced cost: use lower multiplicity
+        else
             if haskey(master.convexity_constraints_lb, sp_id)
                 constraint_index = master.convexity_constraints_lb[sp_id]
                 constraint_set = MOI.get(master.moi_master, MOI.ConstraintSet(), constraint_index)
@@ -102,16 +103,20 @@ function _subprob_contrib(impl::DantzigWolfeColGenImpl, sps_db::Dict{Int64,Float
             end
         end
         
-        subprob_contribution += reduced_cost * multiplicity
+        subprob_contribution += dual_bound * multiplicity
     end
     
     return subprob_contribution
 end
 
 function compute_dual_bound(impl::DantzigWolfeColGenImpl, ::MixedPhase1and2, sps_db::Dict{Int64,Float64}, mast_dual_sol::MasterDualSolution)
+    master = get_master(impl)
+    recomputed_cost = recompute_cost(mast_dual_sol.sol, master.moi_master)
+    @assert abs(recomputed_cost - mast_dual_sol.sol.obj_value) < 1e-6 "Dual solution cost mismatch: recomputed=$recomputed_cost, stored=$(mast_dual_sol.sol.obj_value)"
+
     master_lp_obj_val = mast_dual_sol.sol.obj_value - _convexity_contrib(impl, mast_dual_sol)
     
     sp_contrib = _subprob_contrib(impl, sps_db)
     
-    return master_lp_obj_val + sp_contrib 
+    return mast_dual_sol.sol.obj_value - _convexity_contrib(impl, mast_dual_sol) + _subprob_contrib(impl, sps_db)
 end

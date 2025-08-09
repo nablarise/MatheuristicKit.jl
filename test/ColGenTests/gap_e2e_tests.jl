@@ -128,8 +128,8 @@ Test 2: GAP with Constant in Objective Function
 
 This test verifies column generation handles constant terms correctly:
 - Same constraint structure as Test 1
-- Objective function includes constant term +2
-- Expected dual bound: 15.0 (13 + 2)
+- Objective function includes constant term +300
+- Expected dual bound: 313.0 (13 + 300)
 
 Goal: Ensure constant terms in objective are properly handled during decomposition
 """
@@ -154,7 +154,7 @@ function test_gap_e2e_with_constant()
     
     # Minimization objective WITH CONSTANT TERM (+2)
     @objective(model, Min, 
-        2.0 + sum(cost[machine, job] * assignment[machine, job] for machine in machines, job in jobs))
+        300.0 + sum(cost[machine, job] * assignment[machine, job] for machine in machines, job in jobs))
     
     # Apply reformulation using existing annotation function
     reformulation = RK.dantzig_wolfe_decomposition(model, dw_annotation)

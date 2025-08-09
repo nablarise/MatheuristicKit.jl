@@ -165,7 +165,7 @@ function setup_reformulation!(provider::ReformulationMasterProvider, phase::Mixe
             lower_bound=0.0,
             constraint_coeffs=Dict(constraint_idx => 1.0),
             objective_coeff=cost,
-            name="s⁺[$(constraint_idx.value)]"
+            name="s_pos[$(constraint_idx.value)]"
         )
 
         # Add negative artificial variable (s⁻)  
@@ -173,7 +173,7 @@ function setup_reformulation!(provider::ReformulationMasterProvider, phase::Mixe
             lower_bound=0.0,
             constraint_coeffs=Dict(constraint_idx => -1.0),
             objective_coeff=cost,
-            name="s⁻[$(constraint_idx.value)]"
+            name="s_neg[$(constraint_idx.value)]"
         )
 
         # Store in tracking dictionary
