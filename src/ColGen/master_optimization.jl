@@ -55,6 +55,7 @@ end
 function _populate_constraint_duals(model)
     constraint_duals = Dict{Type{<:MOI.ConstraintIndex},Dict{Int64,Float64}}()
     dual_status = MOI.get(model, MOI.DualStatus())
+    sense = MOI.get(model, MOI.ObjectiveSense()) == MOI.MAX_SENSE ? -1 : 1
 
     if dual_status == MOI.FEASIBLE_POINT
         # Get all constraint types present in the model
@@ -72,7 +73,7 @@ function _populate_constraint_duals(model)
                 # Get dual value for each constraint of this type
                 for constraint_index in constraint_indices
                     dual_value = MOI.get(model, MOI.ConstraintDual(), constraint_index)
-                    constraint_duals[constraint_type][constraint_index.value] = dual_value
+                    constraint_duals[constraint_type][constraint_index.value] = sense * dual_value
                 end
             end
         end
