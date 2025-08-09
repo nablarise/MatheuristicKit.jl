@@ -24,7 +24,7 @@ using MatheuristicKit
 ########
 
 ######## Step 3: use test modules
-using MathOptStateTests, TreeSearchTests, BranchingTests
+using MathOptStateTests, TreeSearchTests, BranchingTests, ColGenTests
 ########
 
 # Load the script that contains the method that tracks the changes and runs
@@ -41,7 +41,8 @@ MODULES_TO_TRACK = [
 TEST_MODULES_TO_TRACK_AND_RUN = [
     MathOptStateTests,
     TreeSearchTests,
-    BranchingTests
+    BranchingTests,
+    ColGenTests
 ]
 ########
 
