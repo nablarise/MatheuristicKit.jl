@@ -220,10 +220,6 @@ end
 
 ##### column generation phase
 
-function stop_colgen_phase(context::DantzigWolfeColGenImpl, ::MixedPhase1and2, colgen_iter_output, incumbent_dual_bound, ip_primal_sol, iteration)
-    return iteration > 30
-end
-
 struct ColGenIterationOutput
     master_lp_obj::Union{Float64,Nothing}
     dual_bound::Union{Float64,Nothing}
@@ -234,7 +230,19 @@ end
 
 colgen_iteration_output_type(::DantzigWolfeColGenImpl) = ColGenIterationOutput
 
+# no iteration output means column generation phase didn't start yet.
+stop_colgen_phase(::DantzigWolfeColGenImpl, _, ::Nothing, _, _, _) = false
 
+function stop_colgen_phase(context::DantzigWolfeColGenImpl, ::MixedPhase1and2, colgen_iter_output::ColGenIterationOutput, incumbent_dual_bound, ip_primal_sol, iteration)
+    master_lp_obj = colgen_iter_output.master_lp_obj
+
+    no_column_added = colgen_iter_output.nb_columns_added == 0
+    iteration_limit = iteration > 1000 # TODO: parameters
+    lp_gap_closed = abs(master_lp_obj - incumbent_dual_bound) < 1e-6 # TODO: parameters
+
+    stop_conditions_met = iteration_limit || no_column_added || lp_gap_closed
+    return stop_conditions_met
+end
 
 function new_iteration_output(::Type{<:ColGenIterationOutput},
     min_sense,
@@ -262,16 +270,17 @@ function after_colgen_iteration(
     stage::ExactStage,
     colgen_iterations::Int64,
     stab::NoStabilization,
-    ip_primal_sol::Nothing,
-    colgen_iter_output::ColGenIterationOutput
+    colgen_iter_output::ColGenIterationOutput,
+    incumbent_dual_bound,
+    ip_primal_sol
 )
     # Log iteration information
     print("Iter $colgen_iterations | ")
     print("Cols: $(colgen_iter_output.nb_columns_added) | ")
 
     # Dual bound
-    if !isnothing(colgen_iter_output.dual_bound)
-        print("DB: $(round(colgen_iter_output.dual_bound, digits=2)) | ")
+    if !isnothing(incumbent_dual_bound)
+        print("DB: $(round(incumbent_dual_bound, digits=2)) | ")
     else
         print("DB: N/A | ")
     end
@@ -289,12 +298,14 @@ function after_colgen_iteration(
     println()
 end
 
-is_better_dual_bound(
-    ::DantzigWolfeColGenImpl,
+function is_better_dual_bound(
+    impl::DantzigWolfeColGenImpl,
     dual_bound::Float64,
     incumbent_dual_bound::Float64
-) = false
-
+)
+    sense = is_minimization(impl) ? 1 : -1
+    return sense * dual_bound > sense * incumbent_dual_bound
+end
 
 struct ColGenPhaseOutput end
 colgen_phase_output_type(::DantzigWolfeColGenImpl) = ColGenPhaseOutput

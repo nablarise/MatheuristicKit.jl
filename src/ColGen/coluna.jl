@@ -84,7 +84,7 @@ function run_colgen_phase!(context, phase, stage, ip_primal_sol, stab; iter = 1)
         if !isnothing(dual_bound) && (isnothing(incumbent_dual_bound) || is_better_dual_bound(context, dual_bound, incumbent_dual_bound))
             incumbent_dual_bound = dual_bound
         end
-        after_colgen_iteration(context, phase, stage, iteration, stab, ip_primal_sol, colgen_iter_output)
+        after_colgen_iteration(context, phase, stage, iteration, stab, colgen_iter_output, incumbent_dual_bound, ip_primal_sol)
         iteration += 1
     end
     O = colgen_phase_output_type(context)
