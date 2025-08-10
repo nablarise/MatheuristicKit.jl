@@ -9,7 +9,7 @@ matheuristics.
 ## Column generation
 ### Quick Start
 
-This example solves a Generalized Assignment Problem using column generation. Column generation automatically decomposes the problem into master and subproblems for efficient optimization.
+This example solves a Generalized Assignment Problem using column generation.
 
 ```julia
 using MatheuristicKit, ReformulationKit, JuMP, GLPK
