@@ -307,7 +307,10 @@ function is_better_dual_bound(
     return sense * dual_bound > sense * incumbent_dual_bound
 end
 
-struct ColGenPhaseOutput end
+struct ColGenPhaseOutput 
+    master_lp_obj::Union{Nothing, Float64}
+    incumbent_dual_bound::Union{Nothing,Float64}
+end
 colgen_phase_output_type(::DantzigWolfeColGenImpl) = ColGenPhaseOutput
 
 function new_phase_output(
@@ -319,7 +322,10 @@ function new_phase_output(
     iteration,
     inc_dual_bound
 )
-    return ColGenPhaseOutput()
+    return ColGenPhaseOutput(
+        colgen_iter_output.master_lp_obj,
+        inc_dual_bound
+    )
 end
 
 function next_phase(::ColGenPhaseIterator, ::MixedPhase1and2, ::ColGenPhaseOutput)
@@ -330,10 +336,15 @@ function next_stage(::ColGenStageIterator, ::ExactStage, ::ColGenPhaseOutput)
     return nothing
 end
 
-struct ColGenOutput end
+struct ColGenOutput 
+    master_lp_obj::Union{Nothing, Float64}
+    incumbent_dual_bound::Union{Nothing,Float64}
+end
 colgen_output_type(::DantzigWolfeColGenImpl) = ColGenOutput
 
-function new_output(::Type{ColGenOutput}, ::ColGenPhaseOutput)
-    println("colgen end")
-    return ColGenOutput()
+function new_output(::Type{ColGenOutput}, colgen_phase_output::ColGenPhaseOutput)
+    return ColGenOutput(
+        colgen_phase_output.master_lp_obj,
+        colgen_phase_output.incumbent_dual_bound
+    )
 end

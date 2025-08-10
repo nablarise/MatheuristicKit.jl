@@ -89,38 +89,10 @@ function test_gap_e2e_classic()
     
     # Run column generation
     result = MK.ColGen.run_column_generation(reformulation)
-    @test result !== nothing
-    
-    # Check dual bound
-    master_model = RK.master(reformulation)
-    
-    try
-        dual_bound = objective_value(master_model)
-        println("Test 1 - Classic GAP: Dual bound = $dual_bound")
-        
-        # Test that dual bound is reasonable
-        @test dual_bound >= 0.0  # Should be non-negative for minimization
-        @test dual_bound <= 100.0  # Should be reasonable upper bound
-        
-        # Verify solution feasibility
-        assignment_values = value.(assignment)
-        
-        # Each job must be assigned to at least one machine (>= 1)
-        for job in jobs
-            total_assignment = sum(assignment_values[machine, job] for machine in machines)
-            @test total_assignment >= 0.99
-        end
-        
-        # Check capacity constraints
-        for machine in machines
-            total_consumption = sum(consumption[machine, job] * assignment_values[machine, job] for job in jobs)
-            @test total_consumption <= capacities[machine] + 1e-6
-        end
-        
-    catch e
-        println("Warning: Could not extract solution from master model: $e")
-        @test true  # Accept that column generation completed successfully
-    end
+
+    @test result isa MK.ColGen.ColGenOutput
+    @test result.master_lp_obj ≈ 13
+    @test result.incumbent_dual_bound ≈ 13
 end
 
 """
@@ -170,36 +142,10 @@ function test_gap_e2e_with_constant()
     
     # Run column generation
     result = MK.ColGen.run_column_generation(reformulation)
-    @test result !== nothing
-    
-    # Check dual bound
-    master_model = RK.master(reformulation)
-    
-    try
-        dual_bound = objective_value(master_model)
-        println("Test 2 - GAP with constant: Dual bound = $dual_bound")
-        
-        # Test that dual bound includes the constant term
-        @test dual_bound >= 2.0  # Should be at least the constant term
-        @test dual_bound <= 100.0  # Should be reasonable upper bound
-        
-        # Verify solution feasibility
-        assignment_values = value.(assignment)
-        
-        for job in jobs
-            total_assignment = sum(assignment_values[machine, job] for machine in machines)
-            @test total_assignment >= 0.99
-        end
-        
-        for machine in machines
-            total_consumption = sum(consumption[machine, job] * assignment_values[machine, job] for job in jobs)
-            @test total_consumption <= capacities[machine] + 1e-6
-        end
-        
-    catch e
-        println("Warning: Could not extract solution from master model: $e")
-        @test true
-    end
+
+    @test result isa MK.ColGen.ColGenOutput
+    @test result.master_lp_obj ≈ 313
+    @test result.incumbent_dual_bound ≈ 313
 end
 
 """
@@ -249,36 +195,10 @@ function test_gap_e2e_maximize_negative()
     
     # Run column generation
     result = MK.ColGen.run_column_generation(reformulation)
-    @test result !== nothing
     
-    # Check dual bound
-    master_model = RK.master(reformulation)
-    
-    try
-        dual_bound = objective_value(master_model)
-        println("Test 3 - GAP maximize negative: Dual bound = $dual_bound")
-        
-        # Test that dual bound is negative for maximization of negative costs
-        @test dual_bound <= 0.0  # Should be non-positive for maximization of negative values
-        @test dual_bound >= -100.0  # Should be reasonable lower bound
-        
-        # Verify solution feasibility
-        assignment_values = value.(assignment)
-        
-        for job in jobs
-            total_assignment = sum(assignment_values[machine, job] for machine in machines)
-            @test total_assignment >= 0.99
-        end
-        
-        for machine in machines
-            total_consumption = sum(consumption[machine, job] * assignment_values[machine, job] for job in jobs)
-            @test total_consumption <= capacities[machine] + 1e-6
-        end
-        
-    catch e
-        println("Warning: Could not extract solution from master model: $e")
-        @test true
-    end
+    @test result isa MK.ColGen.ColGenOutput
+    @test result.master_lp_obj ≈ -13
+    @test result.incumbent_dual_bound ≈ -13
 end
 
 """
@@ -328,38 +248,10 @@ function test_gap_e2e_equality_constraints()
     
     # Run column generation
     result = MK.ColGen.run_column_generation(reformulation)
-    @test result !== nothing
-    
-    # Check dual bound
-    master_model = RK.master(reformulation)
-    
-    try
-        dual_bound = objective_value(master_model)
-        println("Test 4 - GAP equality constraints: Dual bound = $dual_bound")
-        
-        # Test that dual bound is reasonable for equality constraints
-        @test dual_bound >= 0.0  # Should be non-negative for minimization
-        @test dual_bound <= 100.0  # Should be reasonable upper bound
-        
-        # Verify solution feasibility with EQUALITY constraints
-        assignment_values = value.(assignment)
-        
-        # Each job must be assigned to exactly one machine (== 1)
-        for job in jobs
-            total_assignment = sum(assignment_values[machine, job] for machine in machines)
-            @test abs(total_assignment - 1.0) <= 1e-6
-        end
-        
-        # Check capacity constraints
-        for machine in machines
-            total_consumption = sum(consumption[machine, job] * assignment_values[machine, job] for job in jobs)
-            @test total_consumption <= capacities[machine] + 1e-6
-        end
-        
-    catch e
-        println("Warning: Could not extract solution from master model: $e")
-        @test true
-    end
+   
+    @test result isa MK.ColGen.ColGenOutput
+    @test result.master_lp_obj ≈ 13
+    @test result.incumbent_dual_bound ≈ 13
 end
 
 """
@@ -412,38 +304,10 @@ function test_gap_e2e_leq_master_constraints()
     
     # Run column generation
     result = MK.ColGen.run_column_generation(reformulation)
-    @test result !== nothing
-    
-    # Check dual bound
-    master_model = RK.master(reformulation)
-    
-    try
-        dual_bound = objective_value(master_model)
-        println("Test 5 - GAP <= master constraints: Dual bound = $dual_bound")
-        
-        # Test that dual bound is reasonable for <= master constraints
-        @test dual_bound >= 0.0  # Should be non-negative for minimization
-        @test dual_bound <= 100.0  # Should be reasonable upper bound
-        
-        # Verify solution feasibility
-        assignment_values = value.(assignment)
-        
-        # Each job must be assigned to at least one machine (>= 1, equivalent to sum(-1*assignment) <= -1)
-        for job in jobs
-            total_assignment = sum(assignment_values[machine, job] for machine in machines)
-            @test total_assignment >= 0.99
-        end
-        
-        # Check capacity constraints
-        for machine in machines
-            total_consumption = sum(consumption[machine, job] * assignment_values[machine, job] for job in jobs)
-            @test total_consumption <= capacities[machine] + 1e-6
-        end
-        
-    catch e
-        println("Warning: Could not extract solution from master model: $e")
-        @test true
-    end
+   
+    @test result isa MK.ColGen.ColGenOutput
+    @test result.master_lp_obj ≈ 13
+    @test result.incumbent_dual_bound ≈ 13
 end
 
 """
