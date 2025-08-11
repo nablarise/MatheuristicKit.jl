@@ -114,8 +114,6 @@ function compute_dual_bound(impl::DantzigWolfeColGenImpl, ::MixedPhase1and2, sps
     recomputed_cost = recompute_cost(mast_dual_sol.sol, master.moi_master)
     @assert abs(recomputed_cost - mast_dual_sol.sol.obj_value) < 1e-6 "Dual solution cost mismatch: recomputed=$recomputed_cost, stored=$(mast_dual_sol.sol.obj_value)"
 
-    master_lp_obj_val = mast_dual_sol.sol.obj_value - _convexity_contrib(impl, mast_dual_sol)
-    
     sp_contrib = _subprob_contrib(impl, sps_db)
     
     return mast_dual_sol.sol.obj_value - _convexity_contrib(impl, mast_dual_sol) + _subprob_contrib(impl, sps_db)

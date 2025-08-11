@@ -31,6 +31,12 @@ dw_annotation(::Val{:assignment}, machine, job) = RK.dantzig_wolfe_subproblem(ma
 dw_annotation(::Val{:coverage}, job) = RK.dantzig_wolfe_master();
 dw_annotation(::Val{:knapsack}, machine) = RK.dantzig_wolfe_subproblem(machine);
 
+# Annotation function for penalty test with unassigned variables
+dw_annotation_with_penalty(::Val{:assignment}, machine, job) = RK.dantzig_wolfe_subproblem(machine);
+dw_annotation_with_penalty(::Val{:coverage}, job) = RK.dantzig_wolfe_master();
+dw_annotation_with_penalty(::Val{:knapsack}, machine) = RK.dantzig_wolfe_subproblem(machine);
+dw_annotation_with_penalty(::Val{:unassigned}, job) = RK.dantzig_wolfe_master();
+
 function run()
     # Run helper tests
     test_unit_helpers()

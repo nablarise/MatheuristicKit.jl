@@ -215,6 +215,38 @@ function setup_reformulation!(provider::ReformulationMasterProvider, phase::Mixe
 
         provider.geq_art_vars[constraint_idx] = s_pos
     end
+
+    # Relax integrality constraints on master variables
+    # Get all integer variable constraints
+    integer_constraints = MOI.get(master, MOI.ListOfConstraintIndices{MOI.VariableIndex, MOI.Integer}())
+    
+    # Delete integer constraints to relax them to continuous
+    for constraint_idx in integer_constraints
+        MOI.delete(master, constraint_idx)
+    end
+
+    # Get all binary variable constraints
+    binary_constraints = MOI.get(master, MOI.ListOfConstraintIndices{MOI.VariableIndex, MOI.ZeroOne}())
+    
+    # Delete binary constraints and ensure proper bounds [0,1]
+    for constraint_idx in binary_constraints
+        # Get the variable this constraint applies to
+        var_idx = MOI.get(master, MOI.ConstraintFunction(), constraint_idx)
+        
+        # Delete binary constraint
+        MOI.delete(master, constraint_idx)
+        
+        # Ensure former binary variable has proper bounds [0,1]
+        # Set upper bound to 1.0 if not already constrained
+        if !MOI.is_valid(master, MOI.ConstraintIndex{MOI.VariableIndex, MOI.LessThan{Float64}}(var_idx.value))
+            MOI.add_constraint(master, var_idx, MOI.LessThan(1.0))
+        end
+        
+        # Ensure lower bound is 0.0 if not already constrained
+        if !MOI.is_valid(master, MOI.ConstraintIndex{MOI.VariableIndex, MOI.GreaterThan{Float64}}(var_idx.value))
+            MOI.add_constraint(master, var_idx, MOI.GreaterThan(0.0))
+        end
+    end
 end
 
 
