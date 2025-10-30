@@ -5,7 +5,6 @@
 A Julia toolkit for building 
 matheuristics.
 
-
 ## Column generation
 ### Quick Start
 
@@ -57,4 +56,11 @@ Iter 8 | Cols: 1 | DB: 13.0 | LP: 15.0 | IP: N/A
 Iter 9 | Cols: 2 | DB: 13.0 | LP: 13.0 | IP: N/A
 MatheuristicKit.ColGen.ColGenOutput(13.0, 13.000000000000004)
 ```
+
+
+## Work in progress
+
+This package also contains : 
+- [`MathOptState`](https://github.com/nablarise/MatheuristicKit.jl/tree/main/src/MathOptState#readme) an interface to manage changes in MathOptInterface models, particularly in tree search algorithms.
+- [`TreeSearch`](https://github.com/nablarise/MatheuristicKit.jl/tree/main/src/TreeSearch#readme) a collection of tree search algorithms
 
