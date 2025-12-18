@@ -7,6 +7,44 @@ const MOI = MathOptInterface
 const RK = ReformulationKit
 const MK = MatheuristicKit
 
+# Mock callback implementation for testing
+# struct MockCallbacks <: MK.ColGen.AbstractColumnGenerationCallbacks
+#     cost_per_var::Dict{MOI.VariableIndex, Float64}
+#     coeffs_per_var::Dict{MOI.VariableIndex, Vector{Tuple{MOI.ConstraintIndex, Float64}}}
+# end
+
+# # Default constructor with empty mappings
+# MockCallbacks() = MockCallbacks(
+#     Dict{MOI.VariableIndex, Float64}(),
+#     Dict{MOI.VariableIndex, Vector{Tuple{MOI.ConstraintIndex, Float64}}}()
+# )
+
+# function MK.ColGen.compute_column_cost(callbacks::MockCallbacks, sp_id, solution)
+#     cost = 0.0
+#     for (var_idx, value) in solution.variable_values
+#         cost += get(callbacks.cost_per_var, var_idx, 0.0) * value
+#     end
+#     return cost
+# end
+
+# function MK.ColGen.compute_column_coefficients(callbacks::MockCallbacks, sp_id, solution, master_info)
+#     coeffs = Dict{MOI.ConstraintIndex, Float64}()
+#     for (var_idx, value) in solution.variable_values
+#         if haskey(callbacks.coeffs_per_var, var_idx)
+#             for (constr_idx, coeff) in callbacks.coeffs_per_var[var_idx]
+#                 coeffs[constr_idx] = get(coeffs, constr_idx, 0.0) + coeff * value
+#             end
+#         end
+#     end
+#     return coeffs
+# end
+
+# function MK.ColGen.compute_reduced_costs(callbacks::MockCallbacks, sp_id, master_dual_sol)
+#     # For testing, return the original costs as reduced costs
+#     # (assuming zero duals or already incorporated)
+#     return callbacks.cost_per_var
+# end
+
 # Mock types for testing
 struct MockMaster
     is_minimization::Bool

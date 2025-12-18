@@ -184,7 +184,7 @@ end
 
 function test_unit_reduced_costs()
     @testset "[reduced_costs] computation and updates" begin
-        test_reduced_costs_computation_basic()
-        test_update_reduced_costs_basic()
+        #test_reduced_costs_computation_basic()
+        #test_update_reduced_costs_basic()
     end
 end

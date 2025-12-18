@@ -1,7 +1,11 @@
-struct PricingSubproblem{MoiModel}
+struct PricingSubproblem{MoiModel, Callbacks, UserData}
     moi_model::MoiModel
-    coupling_constr_mapping::RK.CouplingConstraintMapping
-    original_cost_mapping::RK.OriginalCostMapping
+    callbacks::Callbacks
+    user_data::UserData
+
+    function PricingSubproblem(moi_model::M, callbacks::C, user_data::U=nothing) where {M,C,U}
+        new{M,C,U}(moi_model, callbacks, user_data)
+    end
 end
 
 moi_pricing_sp(pricing_sp::PricingSubproblem) = pricing_sp.moi_model
@@ -20,7 +24,7 @@ end
 
 struct DantzigWolfeColGenImpl{M,P}
     master_provider::M           # Master + convexity + optimization sense + artificial vars
-    pricing_subprobs_provider::P # Contains all mapping objects (coupling_constr_mapping, original_cost_mapping)
+    pricing_subprobs_provider::P # Contains callback objects for computing costs and coefficients
 
     function DantzigWolfeColGenImpl(reformulation::RK.DantzigWolfeReformulation)
         # Assert optimizer is attached (should be validated upstream)
@@ -89,15 +93,17 @@ function get_pricing_subprobs(provider::ReformulationPricingSubprobsProvider)
         # Extract MOI backend (preserving its concrete type)
         moi_model = JuMP.backend(jump_subproblem)
 
-        # Extract RK mappings from JuMP model extensions
-        coupling_constr_mapping = jump_subproblem.ext[:dw_coupling_constr_mapping]
-        original_cost_mapping = jump_subproblem.ext[:dw_sp_var_original_cost]
+        # Extract callback object from JuMP model extensions
+        # Note: Validated in run_column_generation before this function is called
+        callbacks = jump_subproblem.ext[:dw_colgen_callbacks]
 
-        # Create PricingSubproblem with type-stable MOI model template
+        user_data = nothing
+
+        # Create PricingSubproblem with callback object
         pricing_subproblem = PricingSubproblem(
             moi_model,
-            coupling_constr_mapping,
-            original_cost_mapping
+            callbacks,
+            user_data
         )
 
         subproblems_dict[sp_id] = pricing_subproblem

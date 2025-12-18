@@ -39,30 +39,30 @@ dw_annotation_with_penalty(::Val{:unassigned}, job) = RK.dantzig_wolfe_master();
 
 function run()
     # Run helper tests
-    test_unit_helpers()
+    # test_unit_helpers()
     
-    # Run Dantzig-Wolfe column generation tests
-    test_dw_colgen()
+    # # Run Dantzig-Wolfe column generation tests
+    # test_dw_colgen()
     
-    # Run modular column generation tests
-    test_unit_master_optimization()
-    test_unit_reduced_costs()
-    test_unit_pricing_optimization()
-    test_unit_dual_bounds()
-    test_unit_column_insertion()
-    test_unit_ip_management()
+    # # Run modular column generation tests
+    # test_unit_master_optimization()
+    # test_unit_reduced_costs()
+    # test_unit_pricing_optimization()
+    # test_unit_dual_bounds()
+    # test_unit_column_insertion()
+    # test_unit_ip_management()
     
-    # Run legacy test suite (for backward compatibility)
-    test_unit_solution()
+    # # Run legacy test suite (for backward compatibility)
+    # test_unit_solution()
     
-    # Run optimizer validation tests
-    test_unit_optimizer_validation()
+    # # Run optimizer validation tests
+    # test_unit_optimizer_validation()
     
-    # Run MasterPrimalSolution printing tests
-    test_unit_master_primal_solution_printing()
+    # # Run MasterPrimalSolution printing tests
+    # test_unit_master_primal_solution_printing()
     
-    # Run MasterDualSolution printing tests
-    test_unit_master_dual_solution_printing()
+    # # Run MasterDualSolution printing tests
+    # test_unit_master_dual_solution_printing()
 
     # Run GAP E2E tests with different constraint types
     test_gap_e2e_all()

@@ -2,45 +2,38 @@
 # Author: Guillaume Marques <guillaume@nablarise.com>
 # SPDX-License-Identifier: Proprietary
 
-function _compute_original_column_cost(column::PricingPrimalMoiSolution, original_cost_mapping::RK.OriginalCostMapping)
-    # Compute the original cost of the column using costs from the compact formulation
-    # This is ∑(c_i * x_i) where c_i are original variable costs and x_i are solution values
-    original_cost = 0.0
-    for (var_index, var_value) in column.solution.variable_values
-        if haskey(original_cost_mapping, var_index)
-            original_cost += original_cost_mapping[var_index] * var_value
-        end
-    end
-    return original_cost
+function _compute_original_column_cost(
+    column::PricingPrimalMoiSolution,
+    callbacks,#::AbstractColumnGenerationCallbacks,
+)
+    # Delegate to callback to compute the original cost from the compact formulation
+    return RK.compute_column_cost(callbacks, column.solution)
 end
 
 function _compute_master_constraint_membership(
-    column::PricingPrimalMoiSolution, 
-    coupling_mapping::RK.CouplingConstraintMapping,
+    column::PricingPrimalMoiSolution,
+    callbacks,#::AbstractColumnGenerationCallbacks,
+    subproblem_id,
     master::Master
 )
-    constraint_coeffs = Dict{MOI.ConstraintIndex, Float64}()
-    sp_id = column.subproblem_id
-    
-    # Compute coupling constraint memberships (A * x for each constraint)
-    for (var_index, var_value) in column.solution.variable_values
-        coefficients = RK.get_variable_coefficients(coupling_mapping, var_index)
-        for (constraint_type, constraint_value, coeff) in coefficients
-            constraint_ref = constraint_type(constraint_value)
-            constraint_coeffs[constraint_ref] = get(constraint_coeffs, constraint_ref, 0.0) + coeff * var_value
-        end
-    end
-    
-    # Add convexity constraint membership (coefficient = 1.0)
-    if haskey(master.convexity_constraints_ub, sp_id)
-        conv_constraint_ref = master.convexity_constraints_ub[sp_id]
+    # Get coupling constraint coefficients from callback
+    # Note: Callback returns only coupling constraints, not convexity
+    constraint_coeffs = RK.compute_column_coefficients(
+        callbacks,
+        column.solution,
+    )
+
+    # Add convexity constraint memberships (MatheuristicKit's responsibility)
+    # Coefficient = 1.0 for both lb and ub convexity constraints
+    if haskey(master.convexity_constraints_ub, subproblem_id)
+        conv_constraint_ref = master.convexity_constraints_ub[subproblem_id]
         constraint_coeffs[conv_constraint_ref] = 1.0
     end
-    if haskey(master.convexity_constraints_lb, sp_id)
-        conv_constraint_ref = master.convexity_constraints_lb[sp_id]
+    if haskey(master.convexity_constraints_lb, subproblem_id)
+        conv_constraint_ref = master.convexity_constraints_lb[subproblem_id]
         constraint_coeffs[conv_constraint_ref] = 1.0
     end
-    
+
     return constraint_coeffs
 end
 
@@ -56,13 +49,17 @@ function insert_columns!(context::DantzigWolfeColGenImpl, ::MixedPhase1and2, col
         sp_id = column.subproblem_id
         pricing_sp = pricing_subprobs[sp_id]
         
-        # Compute original column cost (from compact formulation variable costs)
-        original_cost = _compute_original_column_cost(column, pricing_sp.original_cost_mapping)
-        
-        # Compute master constraint membership (how much this solution contributes to each constraint)
+        # Compute original column cost using callbacks
+        original_cost = _compute_original_column_cost(
+            column,
+            pricing_sp.callbacks
+        )
+
+        # Compute master constraint membership using callbacks
         constraint_memberships = _compute_master_constraint_membership(
-            column, 
-            pricing_sp.coupling_constr_mapping,
+            column,
+            pricing_sp.callbacks,
+            sp_id,
             master
         )
         
