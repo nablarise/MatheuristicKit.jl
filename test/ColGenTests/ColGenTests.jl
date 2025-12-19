@@ -26,6 +26,7 @@ include("optimizer_validation.jl")
 include("master_primal_solution_printing.jl")
 include("master_dual_solution_printing.jl")
 include("gap_e2e_tests.jl")
+include("extended_e2e.jl")
 
 dw_annotation(::Val{:assignment}, machine, job) = RK.dantzig_wolfe_subproblem(machine);
 dw_annotation(::Val{:coverage}, job) = RK.dantzig_wolfe_master();
@@ -66,6 +67,8 @@ function run()
 
     # Run GAP E2E tests with different constraint types
     test_gap_e2e_all()
+
+    test_e2e_extended_formulation()
 end
 
 end

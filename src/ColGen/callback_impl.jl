@@ -7,7 +7,7 @@ variable_costs(callbacks::RK.MappingBasedCallbacks) = callbacks.original_cost_ma
 
 function get_constraint_dual_value(solution::DualMoiSolution, constraint_type, constraint_idx)
     haskey(solution.constraint_duals, constraint_type) || return 0.0
-    constraint_dict = master_dual_solution.constraint_duals[constraint_type]
+    constraint_dict = solution.constraint_duals[constraint_type]
     return get(constraint_dict, constraint_idx, 0.0)
 end
 
