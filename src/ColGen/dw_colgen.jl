@@ -129,16 +129,12 @@ struct ExactStage end
 
 struct NoStabilization end
 
-
 new_phase_iterator(::DantzigWolfeColGenImpl) = ColGenPhaseIterator()
 initial_phase(::ColGenPhaseIterator) = MixedPhase1and2()
 new_stage_iterator(::DantzigWolfeColGenImpl) = ColGenStageIterator()
 initial_stage(::ColGenStageIterator) = ExactStage()
 
-
 stop_colgen(::DantzigWolfeColGenImpl, ::Nothing) = false
-
-
 
 function setup_reformulation!(context::DantzigWolfeColGenImpl, phase::MixedPhase1and2)
     setup_reformulation!(context.master_provider, phase)
